@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/nfl-picks/static/css/main.3544c4db.css",
+    "main.js": "/nfl-picks/static/js/main.b232bcb0.js",
+    "index.html": "/nfl-picks/index.html",
+    "main.3544c4db.css.map": "/nfl-picks/static/css/main.3544c4db.css.map",
+    "main.b232bcb0.js.map": "/nfl-picks/static/js/main.b232bcb0.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.3544c4db.css",
+    "static/js/main.b232bcb0.js"
+  ]
+}
