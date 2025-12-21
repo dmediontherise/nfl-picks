@@ -21,6 +21,9 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
   try {
     const allNews = await espnApi.getRealNews();
+    const allTeamIdentifiers = Object.values(TEAMS).flatMap(t => [t.name.toLowerCase(), t.abbreviation.toLowerCase()]);
+    const matchupIdentifiers = [home.name.toLowerCase(), home.abbreviation.toLowerCase(), away.name.toLowerCase(), away.abbreviation.toLowerCase()];
+    const otherTeamIdentifiers = allTeamIdentifiers.filter(id => !matchupIdentifiers.includes(id));
     
     const getRelevantNews = (team: typeof home) => {
         return allNews.filter(n => {
@@ -28,7 +31,7 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
             const description = (n.description || "").toLowerCase();
             const text = (headline + " " + description);
             
-            // ELIMINATE GENERIC/ROUNDUP CONTENT
+            // 1. ELIMINATE GENERIC/ROUNDUP CONTENT
             const isRoundup = text.includes("takeaways") || 
                               text.includes("power rankings") || 
                               text.includes("scores") ||
@@ -36,13 +39,25 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
                               text.includes("what to know") ||
                               text.includes("preview") ||
                               text.includes("recap") ||
-                              text.includes("questions");
+                              text.includes("questions") ||
+                              text.includes("waiver") ||
+                              text.includes("fantasy");
             
             if (isRoundup) return false;
 
-            // ENSURE SPECIFICITY: Team must be the primary focus
-            const nameMatch = text.includes(team.name.toLowerCase()) || text.includes(team.abbreviation.toLowerCase());
-            return nameMatch;
+            // 2. MUST MENTION TARGET TEAM
+            const mentionsTeam = text.includes(team.name.toLowerCase()) || text.includes(team.abbreviation.toLowerCase());
+            if (!mentionsTeam) return false;
+
+            // 3. STRICT EXCLUSION: Must NOT mention teams from OTHER games
+            // We use word boundaries to avoid matching substrings (e.g., 'Giant' in 'Giants')
+            const mentionsOther = otherTeamIdentifiers.some(id => {
+                const regex = new RegExp(`\\b${id}\\b`, 'i');
+                return regex.test(text);
+            });
+            if (mentionsOther) return false;
+
+            return true;
         });
     };
 
