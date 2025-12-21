@@ -82,6 +82,16 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     const getRelevantNews = (team: typeof home) => {
         return allNews.filter(n => {
             const text = (n.headline + " " + n.description).toLowerCase();
+            
+            // Filter out generic/roundup articles
+            const isGeneric = text.includes("questions") || 
+                              text.includes("takeaways") || 
+                              text.includes("what you need to know") ||
+                              text.includes("power rankings") ||
+                              text.includes("best plays");
+            
+            if (isGeneric) return false;
+
             // Check for Team Name or Abbreviation or Category Match
             const nameMatch = text.includes(team.name.toLowerCase()) || text.includes(team.abbreviation.toLowerCase());
             const catMatch = n.categories?.some(c => c.type === 'team' && (c.description === team.name || c.teamId === parseInt(team.id)));
@@ -200,10 +210,17 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   // 2. Real News Integration (The "Intel")
   let intelSection = "";
   if (realNewsSnippets.length > 0) {
-      const mainStory = realNewsSnippets[0].replace("NEWS", "INTEL");
+      // Clean snippet: Remove "NEWS (ABBR):" prefix and any leading dash
+      const cleanNews = (snippet: string) => snippet.replace(/NEWS \([A-Z]+\): /, "").replace(/^—\s*/, "").trim();
+      
+      const mainStory = cleanNews(realNewsSnippets[0]);
       intelSection = `\n\n**The X-Factor:** ${mainStory} This development has forced a significant adjustment in our projection engine.`;
+      
       if (realNewsSnippets.length > 1) {
-          intelSection += ` Additionally, ${realNewsSnippets[1].replace("NEWS (", "").replace("):", " is dealing with")} which complicates the gameplan.`;
+          const secondStory = cleanNews(realNewsSnippets[1]);
+          // Use truncated version if too long
+          const briefSecond = secondStory.length > 80 ? secondStory.substring(0, 80) + "..." : secondStory;
+          intelSection += ` Additionally, reports indicate ${briefSecond} which complicates the gameplan.`;
       }
   } else {
       // Fallback to simulated chatter if no real news
