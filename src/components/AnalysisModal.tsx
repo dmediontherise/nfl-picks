@@ -253,18 +253,6 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                 </div>
               </div>
             )}
-
-            {/* Leverage */}
-            {analysis && (
-              <div className="p-4 md:p-6 rounded-xl border border-slate-700/50 backdrop-blur-sm" style={{ backgroundColor: `${game.homeTeam.color}10` }}>
-                <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
-                  <Activity className="w-5 h-5 mr-2 text-green-400" /> Leverage
-                </h3>
-                 <TugOfWar label="Offensive Efficiency" value={analysis.leverage.offense} homeColor={game.homeTeam.color} awayColor={game.awayTeam.color} />
-                 <TugOfWar label="Defensive Solidity" value={analysis.leverage.defense} homeColor={game.homeTeam.color} awayColor={game.awayTeam.color} />
-                 <TugOfWar label="QB Play" value={analysis.leverage.qb} homeColor={game.homeTeam.color} awayColor={game.awayTeam.color} />
-              </div>
-            )}
           </div>
 
           {/* Center/Right Column: AI Analysis */}
