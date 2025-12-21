@@ -179,7 +179,7 @@ const App: React.FC = () => {
                 >
                   {/* Prediction Overlay Badge */}
                   {prediction && (
-                    <div className="absolute top-2 right-2 flex flex-col items-end gap-1 z-10">
+                    <div className="absolute top-[44px] right-2 flex flex-col items-end gap-1 z-10">
                         <div className="bg-green-500/20 border border-green-500/50 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
                         PICK LOCKED
                         </div>
