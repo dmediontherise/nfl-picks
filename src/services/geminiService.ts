@@ -162,6 +162,12 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
   const winner = finalHomeScore > finalAwayScore ? home.name : away.name;
   
+  // Restore required variables for narrative and grading
+  const homeNews = generateTeamNews(home, game.id);
+  const awayNews = generateTeamNews(away, game.id);
+  const spreadCovered = (winner === home.name && (finalHomeScore - finalAwayScore) > vegaSpread) ||
+                        (winner === away.name && (finalAwayScore - finalHomeScore) > -vegaSpread);
+
   // --- NARRATIVE GENERATOR (ENHANCED) ---
   const margin = Math.abs(finalHomeScore - finalAwayScore);
   const totalScore = finalHomeScore + finalAwayScore;
