@@ -330,6 +330,17 @@ const App: React.FC = () => {
             results={gameResults}
         />
       )}
+
+      {/* Footer Disclaimer */}
+      <footer className="max-w-7xl mx-auto px-4 py-8 border-t border-slate-900 mt-8">
+        <p className="text-[8px] leading-relaxed text-slate-600 text-center max-w-3xl mx-auto">
+          Disclaimer: This application and the NFL picks provided herein are for educational and entertainment purposes only. 
+          All information is intended to enhance the fan experience and should not be construed as professional financial or legal advice. 
+          We do not offer real-money gambling or sports betting services. Betting involves significant risk, and we are not responsible 
+          for any financial losses or damages resulting from the use of the information on this site. If you or someone you know 
+          has a gambling problem, please call 1-800-GAMBLER. Must be 21+ to participate in sports wagering.
+        </p>
+      </footer>
     </div>
   );
 };
