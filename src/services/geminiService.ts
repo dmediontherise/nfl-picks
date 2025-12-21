@@ -339,34 +339,50 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     const qualityFactor = (6 - avgTier) * 5; 
     const finalExecutionRating = Math.min(99, Math.round((predictionConfidence * 0.6) + qualityFactor + 20));
 
-  return {
-    winnerPrediction: winner,
-    homeScorePrediction: finalHomeScore,
-    awayScorePrediction: finalAwayScore,
-    confidenceScore: predictionConfidence,
-    summary: `${winner} wins ${finalHomeScore}-${finalAwayScore}`,
-    narrative: narrative,
-    keyFactors: [`ATS Trend: ${spreadCovered ? "Likely Cover" : "Trap Line"}`, `Turnover Margin`, `Red Zone Efficiency`],
-    injuryImpact: injuryNews,
-    coachingMatchup: home.tier < away.tier ? "Coaching Advantage" : "Even Matchup",
-    playersToWatch: generatePlayersToWatch(),
-    statComparison: {
-      home: [home.offRating, home.defRating, home.qbStats?.passingTds || 0, home.qbStats?.passingYds || 0, home.qbStats?.interceptions || 0],
-      away: [away.offRating, away.defRating, away.qbStats?.passingTds || 0, away.qbStats?.passingYds || 0, away.qbStats?.interceptions || 0]
-    },
-    sources: [{ title: "Action Network Intel", uri: "#" }],
-    jinxAnalysis: jinxAnalysisText,
-    jinxScore: Math.abs(finalHomeScore - finalAwayScore) < 7 ? 8 : 3,
-    upsetProbability: 30,
-    weather: { temp: 42, condition: "Clear", windSpeed: 5, impactOnPassing: "Low" },
-    executionRating: finalExecutionRating,
-    explosiveRating: finalExplosiveRating,
-    quickTake: Math.abs(finalHomeScore - finalAwayScore) > 10 ? "Mismatch" : "Close Game",
-    latestNews: [...realNewsSnippets, ...homeNews.map(n => `[${home.abbreviation}] ${n}`), ...awayNews.map(n => `[${away.abbreviation}] ${n}`)],
-    leverage: {
-        offense: Math.min(95, Math.max(5, 50 + (home.offRating - away.offRating) * 1.5)),
-        defense: Math.min(95, Math.max(5, 50 + (home.defRating - away.defRating) * 1.5)),
-        qb: Math.min(95, Math.max(5, 50 + ((away.tier - home.tier) * 15))) 
-    }
-  };
+    // Dynamic Leverage Calculation (REAL-TIME STATS SYNTHESIS)
+    const calculateQBLeverage = () => {
+        if (!home.qbStats || !away.qbStats) return Math.min(95, Math.max(5, 50 + ((away.tier - home.tier) * 15)));
+        
+        // Calculate a 'Power Score' for each QB based on real-time season stats
+        const getQBScore = (stats: any) => (stats.passingTds * 5) + (stats.passingYds / 50) - (stats.interceptions * 3);
+        const hScore = getQBScore(home.qbStats);
+        const aScore = getQBScore(away.qbStats);
+        
+        // Return Home % (50 is even)
+        return Math.min(95, Math.max(5, 50 + (hScore - aScore) * 0.8));
+    };
+
+    const qbLeverage = calculateQBLeverage();
+
+    return {
+      winnerPrediction: winner,
+      homeScorePrediction: finalHomeScore,
+      awayScorePrediction: finalAwayScore,
+      confidenceScore: predictionConfidence,
+      summary: `${winner} wins ${finalHomeScore}-${finalAwayScore}`,
+      narrative: narrative,
+      keyFactors: [`ATS Trend: ${spreadCovered ? "Likely Cover" : "Trap Line"}`, `Turnover Margin`, `Red Zone Efficiency`],
+      injuryImpact: injuryNews,
+      coachingMatchup: home.tier < away.tier ? "Coaching Advantage" : "Even Matchup",
+      playersToWatch: generatePlayersToWatch(),
+      statComparison: {
+        home: [home.offRating, home.defRating, home.qbStats?.passingTds || 0, home.qbStats?.passingYds || 0, home.qbStats?.interceptions || 0],
+        away: [away.offRating, away.defRating, away.qbStats?.passingTds || 0, away.qbStats?.passingYds || 0, away.qbStats?.interceptions || 0]
+      },
+      sources: [{ title: "Action Network Intel", uri: "#" }],
+      jinxAnalysis: jinxAnalysisText,
+      jinxScore: Math.abs(finalHomeScore - finalAwayScore) < 7 ? 8 : 3,
+      upsetProbability: 30,
+      weather: { temp: 42, condition: "Clear", windSpeed: 5, impactOnPassing: "Low" },
+      executionRating: finalExecutionRating,
+      explosiveRating: finalExplosiveRating,
+      quickTake: Math.abs(finalHomeScore - finalAwayScore) > 10 ? "Mismatch" : "Close Game",
+      latestNews: [...realNewsSnippets, ...homeNews.map(n => `[${home.abbreviation}] ${n}`), ...awayNews.map(n => `[${away.abbreviation}] ${n}`)],
+      
+      leverage: {
+          offense: Math.min(95, Math.max(5, 50 + (home.offRating - away.offRating) * 1.5)),
+          defense: Math.min(95, Math.max(5, 50 + (home.defRating - away.defRating) * 1.5)),
+          qb: Math.round(qbLeverage)
+      }
+    };
 };
