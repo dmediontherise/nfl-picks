@@ -333,11 +333,13 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     quickTake: Math.abs(finalHomeScore - finalAwayScore) > 10 ? "Mismatch" : "Close Game",
     latestNews: [...realNewsSnippets, ...homeNews.map(n => `[${home.abbreviation}] ${n}`), ...awayNews.map(n => `[${away.abbreviation}] ${n}`)],
     
-    // Dynamic Leverage Calculation
+    // Dynamic Leverage Calculation (Weighted Differential)
+    // Formula: 50 + (HomeRating - AwayRating) * Multiplier
+    // This pushes the leverage meters further to the edges for visual clarity
     leverage: {
-        offense: Math.round((home.offRating / (home.offRating + away.offRating)) * 100),
-        defense: Math.round((home.defRating / (home.defRating + away.defRating)) * 100),
-        qb: Math.min(95, Math.max(5, 50 + ((away.tier - home.tier) * 10))) // Based on Tier diff
+        offense: Math.min(95, Math.max(5, 50 + (home.offRating - away.offRating) * 1.5)),
+        defense: Math.min(95, Math.max(5, 50 + (home.defRating - away.defRating) * 1.5)),
+        qb: Math.min(95, Math.max(5, 50 + ((away.tier - home.tier) * 15))) // Increased tier impact
     }
   };
 };
