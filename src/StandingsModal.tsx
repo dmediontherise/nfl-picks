@@ -1,0 +1,166 @@
+import React from 'react';
+import { X, Trophy, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { UserPrediction } from './types';
+
+interface GameResult {
+    homeScore: number;
+    awayScore: number;
+    spread: string; // "BUF -10.5"
+    homeAbbr: string;
+    awayAbbr: string;
+    homeName: string;
+    awayName: string;
+}
+
+interface StandingsModalProps {
+    onClose: () => void;
+    predictions: Record<string, UserPrediction>;
+    results: Record<string, GameResult>;
+}
+
+export const StandingsModal: React.FC<StandingsModalProps> = ({ onClose, predictions, results }) => {
+    
+    const calculateRecord = (isUser: boolean) => {
+        let wins = 0;
+        let losses = 0;
+        let atsWins = 0;
+        let atsLosses = 0;
+        let atsPushes = 0;
+
+        Object.keys(results).forEach(gameId => {
+            const pred = predictions[gameId];
+            const result = results[gameId];
+            if (!pred || !result) return;
+
+            // Determine Prediction
+            const winnerPick = isUser ? pred.userPredictedWinner : pred.predictedWinner;
+            const homeScorePick = isUser ? parseInt(pred.userHomeScore || "0") : parseInt(pred.homeScore); // Not used for winner calc directly
+            
+            if (!winnerPick) return;
+
+            // 1. Outright Winner
+            const actualWinner = result.homeScore > result.awayScore ? result.homeAbbr : result.awayAbbr;
+            // The prediction stores "Name" (e.g. Buffalo Bills), result stores Abbr usually if I saved it that way.
+            // Wait, my result storage plan needs to store Names or Abbrs consistently.
+            // Let's assume we match on Name if possible, or Abbr.
+            // In App.tsx I'll ensure I save Names or mapped Abbrs.
+            // Let's assume prediction.predictedWinner is the Full Name.
+            // We need to compare correctly.
+            // Simplification: Check if the picked Team Name matches the actual winner.
+            // Since I don't have the full Team Name in 'results' unless I save it, I should save it.
+            
+            // Re-evaluating: I'll save the 'winnerName' in results.
+        });
+        
+        return { wins, losses, atsWins, atsLosses, atsPushes };
+    };
+
+    // ... I'll implement the full logic inside the main render for simplicity of state access 
+    // actually, let's keep it here but I need to ensure data compatibility.
+    
+    // Improved Logic:
+    let userRecord = { w: 0, l: 0, atsW: 0, atsL: 0, atsP: 0 };
+    let appRecord = { w: 0, l: 0, atsW: 0, atsL: 0, atsP: 0 };
+
+    Object.keys(results).forEach(gameId => {
+        const res = results[gameId];
+        const pred = predictions[gameId];
+        if (!pred) return; // No prediction for this game
+
+        const actualWinnerName = res.homeScore > res.awayScore ? res.homeName : res.awayName; // Need Names in Result
+        
+        // --- User ---
+        if (pred.userPredictedWinner) {
+            if (pred.userPredictedWinner === actualWinnerName) userRecord.w++; else userRecord.l++;
+            
+            // ATS
+            if (res.spread) {
+                 const parts = res.spread.split(' ');
+                 if (parts.length >= 2) {
+                     const favAbbr = parts[0];
+                     const line = parseFloat(parts[1]);
+                     const margin = favAbbr === res.homeAbbr ? (res.homeScore - res.awayScore) : (res.awayScore - res.homeScore);
+                     const diff = margin + line;
+                     
+                     const pickedFav = pred.userPredictedWinner === (favAbbr === res.homeAbbr ? res.homeName : res.awayName);
+                     
+                     if (diff === 0) userRecord.atsP++;
+                     else if (diff > 0 && pickedFav) userRecord.atsW++;
+                     else if (diff < 0 && !pickedFav) userRecord.atsW++;
+                     else userRecord.atsL++;
+                 }
+            }
+        }
+
+        // --- App ---
+        if (pred.predictedWinner) {
+            if (pred.predictedWinner === actualWinnerName) appRecord.w++; else appRecord.l++;
+             // ATS
+            if (res.spread) {
+                 const parts = res.spread.split(' ');
+                 if (parts.length >= 2) {
+                     const favAbbr = parts[0];
+                     const line = parseFloat(parts[1]);
+                     const margin = favAbbr === res.homeAbbr ? (res.homeScore - res.awayScore) : (res.awayScore - res.homeScore);
+                     const diff = margin + line;
+                     
+                     const pickedFav = pred.predictedWinner === (favAbbr === res.homeAbbr ? res.homeName : res.awayName);
+                     
+                     if (diff === 0) appRecord.atsP++;
+                     else if (diff > 0 && pickedFav) appRecord.atsW++;
+                     else if (diff < 0 && !pickedFav) appRecord.atsW++;
+                     else appRecord.atsL++;
+                 }
+            }
+        }
+    });
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="bg-slate-900 w-full max-w-2xl rounded-2xl border border-slate-700 shadow-2xl overflow-hidden">
+                <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                    <h2 className="text-xl font-black text-white flex items-center gap-2">
+                        <Trophy className="w-6 h-6 text-yellow-500" /> Season Standings
+                    </h2>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X className="w-6 h-6" /></button>
+                </div>
+                
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* User Card */}
+                    <div className="bg-slate-950 p-6 rounded-xl border border-blue-500/30 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10"><Trophy className="w-24 h-24" /></div>
+                        <h3 className="text-blue-400 font-bold uppercase tracking-widest mb-4">Your Record</h3>
+                        <div className="space-y-4 relative z-10">
+                            <div>
+                                <span className="text-slate-500 text-xs uppercase font-bold">Straight Up</span>
+                                <div className="text-4xl font-black text-white">{userRecord.w}-{userRecord.l}</div>
+                                <div className="text-xs text-slate-400">{((userRecord.w / (userRecord.w + userRecord.l || 1))*100).toFixed(1)}%</div>
+                            </div>
+                            <div>
+                                <span className="text-slate-500 text-xs uppercase font-bold">Against The Spread</span>
+                                <div className="text-3xl font-bold text-slate-300">{userRecord.atsW}-{userRecord.atsL}<span className="text-slate-600 text-base">-{userRecord.atsP}</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* App Card */}
+                    <div className="bg-slate-950 p-6 rounded-xl border border-slate-700 relative overflow-hidden">
+                         <div className="absolute top-0 right-0 p-4 opacity-10"><TrendingUp className="w-24 h-24" /></div>
+                        <h3 className="text-slate-400 font-bold uppercase tracking-widest mb-4">Medi Picks AI</h3>
+                        <div className="space-y-4 relative z-10">
+                            <div>
+                                <span className="text-slate-500 text-xs uppercase font-bold">Straight Up</span>
+                                <div className="text-4xl font-black text-white">{appRecord.w}-{appRecord.l}</div>
+                                <div className="text-xs text-slate-400">{((appRecord.w / (appRecord.w + appRecord.l || 1))*100).toFixed(1)}%</div>
+                            </div>
+                            <div>
+                                <span className="text-slate-500 text-xs uppercase font-bold">Against The Spread</span>
+                                <div className="text-3xl font-bold text-slate-300">{appRecord.atsW}-{appRecord.atsL}<span className="text-slate-600 text-base">-{appRecord.atsP}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};

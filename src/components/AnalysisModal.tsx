@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Trophy, AlertTriangle, Activity, User, ExternalLink, Loader2, BrainCircuit, Cloud, Wind, Flame, Zap, RefreshCw, TrendingUp, DollarSign } from 'lucide-react';
-import { Game, AnalysisResult, UserPrediction, Team } from './types';
-import { analyzeMatchup } from './services/geminiService';
+import { Game, AnalysisResult, UserPrediction, Team } from '../types';
+import { analyzeMatchup } from '../services/geminiService';
 
 interface AnalysisModalProps {
   game: Game;
@@ -42,6 +42,11 @@ const TugOfWar: React.FC<{ homeColor: string, awayColor: string, label: string, 
 const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPrediction, onSavePrediction }) => {
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  
+  // Custom User Inputs
+  const [customHomeScore, setCustomHomeScore] = useState(userPrediction?.userHomeScore || "");
+  const [customAwayScore, setCustomAwayScore] = useState(userPrediction?.userAwayScore || "");
+  const [customWinner, setCustomWinner] = useState(userPrediction?.userPredictedWinner || "");
 
   // Auto-analyze on mount
   useEffect(() => {
@@ -50,7 +55,15 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
       setLoading(true);
       try {
         const result = await analyzeMatchup(game);
-        if (isMounted) setAnalysis(result);
+        if (isMounted) {
+            setAnalysis(result);
+            // Pre-fill user inputs with AI prediction if empty
+            if (!userPrediction) {
+                setCustomHomeScore(result.homeScorePrediction.toString());
+                setCustomAwayScore(result.awayScorePrediction.toString());
+                setCustomWinner(result.winnerPrediction);
+            }
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -67,6 +80,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
     try {
       const result = await analyzeMatchup(game, true);
       setAnalysis(result);
+      // Don't overwrite user custom inputs on refresh unless empty? Let's leave them.
     } catch (err) {
       console.error(err);
     } finally {
@@ -80,7 +94,10 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
       gameId: game.id,
       homeScore: analysis.homeScorePrediction.toString(),
       awayScore: analysis.awayScorePrediction.toString(),
-      predictedWinner: analysis.winnerPrediction
+      predictedWinner: analysis.winnerPrediction,
+      userHomeScore: customHomeScore,
+      userAwayScore: customAwayScore,
+      userPredictedWinner: customWinner
     });
   };
 
@@ -148,7 +165,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                 <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4 flex items-center justify-center gap-2">
                   <Activity className="w-4 h-4" /> Medi Jinx Projection
                 </h3>
-                <div className="flex items-center justify-center gap-6">
+                <div className="flex items-center justify-center gap-6 mb-6">
                   <div>
                     <div className="text-4xl font-black text-white">{analysis.awayScorePrediction}</div>
                     <div className="text-[10px] text-slate-500 uppercase">{game.awayTeam.abbreviation}</div>
@@ -159,9 +176,47 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                     <div className="text-[10px] text-slate-500 uppercase">{game.homeTeam.abbreviation}</div>
                   </div>
                 </div>
+
+                {/* User Input Section */}
+                <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center justify-center gap-2">
+                        <User className="w-3 h-3" /> Your Prediction
+                    </h4>
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                        <div className="flex flex-col w-16">
+                            <label className="text-[8px] text-slate-500 uppercase mb-1">{game.awayTeam.abbreviation}</label>
+                            <input 
+                                type="number" 
+                                value={customAwayScore}
+                                onChange={(e) => setCustomAwayScore(e.target.value)}
+                                className="bg-slate-900 border border-slate-700 rounded text-center text-white font-mono p-1 focus:border-blue-500 outline-none"
+                            />
+                        </div>
+                        <span className="text-slate-600">-</span>
+                        <div className="flex flex-col w-16">
+                            <label className="text-[8px] text-slate-500 uppercase mb-1">{game.homeTeam.abbreviation}</label>
+                            <input 
+                                type="number" 
+                                value={customHomeScore}
+                                onChange={(e) => setCustomHomeScore(e.target.value)}
+                                className="bg-slate-900 border border-slate-700 rounded text-center text-white font-mono p-1 focus:border-blue-500 outline-none"
+                            />
+                        </div>
+                    </div>
+                    <select 
+                        value={customWinner}
+                        onChange={(e) => setCustomWinner(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white outline-none focus:border-blue-500"
+                    >
+                        <option value="">Select Winner</option>
+                        <option value={game.awayTeam.name}>{game.awayTeam.name}</option>
+                        <option value={game.homeTeam.name}>{game.homeTeam.name}</option>
+                    </select>
+                </div>
+
                 <button 
                   onClick={handlePredict}
-                  className="w-full mt-6 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition-all shadow-lg shadow-blue-900/20 active:scale-95 text-xs uppercase tracking-wide"
+                  className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition-all shadow-lg shadow-blue-900/20 active:scale-95 text-xs uppercase tracking-wide"
                 >
                   Save Prediction
                 </button>
@@ -205,9 +260,9 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
                   <Activity className="w-5 h-5 mr-2 text-green-400" /> Leverage
                 </h3>
-                 <TugOfWar label="Offensive Efficiency" value={55} homeColor={game.homeTeam.color} awayColor={game.awayTeam.color} />
-                 <TugOfWar label="Defensive Solidity" value={40} homeColor={game.homeTeam.color} awayColor={game.awayTeam.color} />
-                 <TugOfWar label="QB Play" value={70} homeColor={game.homeTeam.color} awayColor={game.awayTeam.color} />
+                 <TugOfWar label="Offensive Efficiency" value={analysis.leverage.offense} homeColor={game.homeTeam.color} awayColor={game.awayTeam.color} />
+                 <TugOfWar label="Defensive Solidity" value={analysis.leverage.defense} homeColor={game.homeTeam.color} awayColor={game.awayTeam.color} />
+                 <TugOfWar label="QB Play" value={analysis.leverage.qb} homeColor={game.homeTeam.color} awayColor={game.awayTeam.color} />
               </div>
             )}
           </div>

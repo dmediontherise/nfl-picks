@@ -1,6 +1,7 @@
 import { Game, AnalysisResult, Team } from '../types';
 import { TEAMS } from '../data/nfl_data';
 import { generateTeamNews } from './newsFactory';
+import { espnApi, NewsArticle } from './espnAdapter';
 
 const getTeamData = (team: Team) => {
   return TEAMS[team.abbreviation] || { ...team, tier: 3, offRating: 75, defRating: 75, record: "0-0", standing: "N/A", status: "Bubble", keyInjuries: [] };
@@ -56,7 +57,7 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   const applyInjuryPenalty = (team: typeof home) => {
     let penalty = 0;
     team.keyInjuries?.forEach(injury => {
-      if (injury.includes("Mahomes") || injury.includes("Rodgers") || injury.includes("Burrow")) penalty += 7; // Points, not rating
+      if (injury.includes("Mahomes") || injury.includes("Rodgers") || injury.includes("Burrow")) penalty += 7; 
       else if (injury.includes("QB")) penalty += 4;
       else penalty += 2;
     });
@@ -66,20 +67,76 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   const homeInjuryPen = applyInjuryPenalty(home);
   const awayInjuryPen = applyInjuryPenalty(away);
 
-  // Rating Delta Impact
-  // Compare Offense vs Opponent Defense
-  // If Home Offense (90) vs Away Defense (70) -> Advantage Home
-  // Scale: 10 rating diff = ~3 points
+  // Matchup Advantage
   const homeMatchupAdvantage = (home.offRating - away.defRating) / 4;
   const awayMatchupAdvantage = (away.offRating - home.defRating) / 4;
 
-  // Apply to Implied Scores
-  let finalHomeScore = impliedHome + homeMatchupAdvantage - homeInjuryPen;
-  let finalAwayScore = impliedAway + awayMatchupAdvantage - awayInjuryPen;
+  // --- 2.5 REAL NEWS INTEGRATION ---
+  let newsModHome = 0;
+  let newsModAway = 0;
+  let realNewsSnippets: string[] = [];
 
-  // --- 3. APPLY VARIANCE & REFRESH ---
-  const variance = (Math.random() * 6) - 3; // +/- 3 points "Any Given Sunday" noise
-  const refreshVariance = forceRefresh ? (Math.random() * 4) - 2 : 0;
+  try {
+    const allNews = await espnApi.getRealNews();
+    
+    const getRelevantNews = (team: typeof home) => {
+        return allNews.filter(n => {
+            const text = (n.headline + " " + n.description).toLowerCase();
+            // Check for Team Name or Abbreviation or Category Match
+            const nameMatch = text.includes(team.name.toLowerCase()) || text.includes(team.abbreviation.toLowerCase());
+            const catMatch = n.categories?.some(c => c.type === 'team' && (c.description === team.name || c.teamId === parseInt(team.id)));
+            return nameMatch || catMatch;
+        });
+    };
+
+    const homeReal = getRelevantNews(home);
+    const awayReal = getRelevantNews(away);
+
+    const calculateNewsImpact = (articles: NewsArticle[]) => {
+        let impact = 0;
+        articles.forEach(a => {
+            const text = (a.headline + " " + a.description).toLowerCase();
+            // Negative Keywords
+            if (text.includes("out ") || text.includes("injury") || text.includes("concussion") || text.includes("ir ")) impact -= 3;
+            if (text.includes("doubtful") || text.includes("questionable") || text.includes("benched")) impact -= 2;
+            // Positive Keywords
+            if (text.includes("return") || text.includes("cleared") || text.includes("active")) impact += 2;
+        });
+        return Math.max(-10, Math.min(10, impact)); // Cap impact
+    };
+
+    newsModHome = calculateNewsImpact(homeReal);
+    newsModAway = calculateNewsImpact(awayReal);
+
+    if (homeReal.length) realNewsSnippets.push(`NEWS (${home.abbreviation}): ${homeReal[0].description}`);
+    if (awayReal.length) realNewsSnippets.push(`NEWS (${away.abbreviation}): ${awayReal[0].description}`);
+
+  } catch (e) {
+    console.warn("News integration skipped:", e);
+  }
+
+  // Apply to Implied Scores (Including Real News Impact)
+  let finalHomeScore = impliedHome + homeMatchupAdvantage - homeInjuryPen + newsModHome;
+  let finalAwayScore = impliedAway + awayMatchupAdvantage - awayInjuryPen + newsModAway;
+
+  // --- 3. APPLY VARIANCE (DETERMINISTIC) ---
+  // Use a seeded random generator so every user sees the same score for the same game
+  const getSeededRandom = (seed: string) => {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      const char = seed.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; 
+    }
+    const x = Math.sin(hash) * 10000;
+    return x - Math.floor(x);
+  };
+
+  const rng = getSeededRandom(game.id + "_variance_v1");
+  const variance = (rng * 6) - 3; // +/- 3 points, but consistent per game
+  
+  // Refresh variance is removed to ensure consistency across users/devices
+  const refreshVariance = 0; 
 
   finalHomeScore += variance + refreshVariance;
   finalAwayScore -= (variance + refreshVariance); // Often correlations are inverse in tight games
@@ -105,25 +162,58 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
   const winner = finalHomeScore > finalAwayScore ? home.name : away.name;
   
-  // --- NARRATIVE GENERATOR ---
-  // (Re-using the robust logic from before, tailored to the new score)
-  
-  const spreadCovered = (winner === home.name && (finalHomeScore - finalAwayScore) > vegaSpread) ||
-                        (winner === away.name && (finalAwayScore - finalHomeScore) > -vegaSpread); // Rough logic
+  // --- NARRATIVE GENERATOR (ENHANCED) ---
+  const margin = Math.abs(finalHomeScore - finalAwayScore);
+  const totalScore = finalHomeScore + finalAwayScore;
+  const isUpset = (vegaSpread > 0 && winner === away.name) || (vegaSpread < 0 && winner === home.name); // Rough upset check
 
-  let intro = `In a Week 16 clash at ${game.venue.split(' ')[0]}, the ${winner} look to assert dominance.`;
-  if (Math.abs(finalHomeScore - finalAwayScore) <= 3) intro = `Expect a nail-biter at ${game.venue}. This one comes down to the final possession.`;
-  if (Math.abs(finalHomeScore - finalAwayScore) > 14) intro = `The models are predicting a lopsided affair. The ${winner} have too much firepower.`;
+  // Helper for deterministic random selection from arrays
+  const pick = (options: string[]) => options[Math.floor((rng * 100) % options.length)];
 
-  const homeNews = generateTeamNews(home);
-  const awayNews = generateTeamNews(away);
-  
-  let bettingContext = "";
-  if (game.bettingData) {
-    bettingContext = `Vegas set the line at ${game.bettingData.spread}, and the Medi Jinx model projects a ${Math.abs(finalHomeScore - finalAwayScore)} point margin.`;
+  // 1. Dynamic Intro
+  const standardIntros = [
+      `The atmosphere at ${game.venue} is electric for this Week ${game.week} showdown.`,
+      `It's a grudge match in the making as the ${away.name} roll into town to face the ${home.name}.`,
+      `History suggests a battle, but the analytics are telling a specific story for this matchup.`
+  ];
+  const closeIntros = [
+      `Get your popcorn ready. The Medi models are deadlocked, predicting a wire-to-wire thriller.`,
+      `This one is going to come down to the final possession. A true coin-flip game at ${game.venue}.`,
+      `Razor-thin margins separate these two squads. One mistake will decide it.`
+  ];
+  const blowoutIntros = [
+      `The metrics are screaming "Mismatch." This could get ugly early if the ${winner} execute.`,
+      `Total dominance is on the cards. The ${winner} simply outclass their opponent in every key metric.`,
+      `Don't blink, or you might miss the ${winner} running away with this one.`
+  ];
+
+  let selectedIntro = pick(standardIntros);
+  if (margin <= 4) selectedIntro = pick(closeIntros);
+  if (margin > 14) selectedIntro = pick(blowoutIntros);
+
+  // 2. Real News Integration (The "Intel")
+  let intelSection = "";
+  if (realNewsSnippets.length > 0) {
+      const mainStory = realNewsSnippets[0].replace("NEWS", "INTEL");
+      intelSection = `\n\n**The X-Factor:** ${mainStory} This development has forced a significant adjustment in our projection engine.`;
+      if (realNewsSnippets.length > 1) {
+          intelSection += ` Additionally, ${realNewsSnippets[1].replace("NEWS (", "").replace("):", " is dealing with")} which complicates the gameplan.`;
+      }
+  } else {
+      // Fallback to simulated chatter if no real news
+      intelSection = `\n\n**Locker Room Intel:** ${homeNews[0]} Meanwhile, the ${away.abbreviation} camp is buzzing about: "${awayNews[0]}"`;
   }
 
-  const narrative = `${intro}\n\n**The Matchup:** ${homeNews[0]} Meanwhile, ${away.abbreviation} is dealing with: \"${awayNews[0]}\"\n\n**The Verdict:** ${bettingContext} ${home.keyInjuries?.length ? `Despite injuries to ${home.keyInjuries[0]}, ` : ""}the ${winner} prevail ${finalHomeScore}-${finalAwayScore}.`;
+  // 3. The Verdict with Personality
+  let bettingContext = "";
+  if (game.bettingData) {
+    const coverText = (winner === home.name && (finalHomeScore - finalAwayScore) > vegaSpread) ? "covering the spread" : "beating the number";
+    bettingContext = `Vegas likes the line at ${game.bettingData.spread}, but the Medi Jinx data sees the ${winner} ${coverText}.`;
+  }
+
+  const verdict = `\n\n**The Bottom Line:** ${bettingContext} ${isUpset ? "Smell that? It smells like an UPSET." : "Trust the talent gap."} We're locking in the ${winner} to take it ${finalHomeScore}-${finalAwayScore}.`;
+
+  const narrative = `${selectedIntro}${intelSection}${verdict}`;
 
   const injuryNews = forceRefresh 
     ? "LATEST: " + (home.keyInjuries?.[0] || "No major changes") + " - situations fluid."
@@ -155,6 +245,13 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     executionRating: 85,
     explosiveRating: 78,
     quickTake: Math.abs(finalHomeScore - finalAwayScore) > 10 ? "Mismatch" : "Close Game",
-    latestNews: [...homeNews.map(n => `[${home.abbreviation}] ${n}`), ...awayNews.map(n => `[${away.abbreviation}] ${n}`)]
+    latestNews: [...realNewsSnippets, ...homeNews.map(n => `[${home.abbreviation}] ${n}`), ...awayNews.map(n => `[${away.abbreviation}] ${n}`)],
+    
+    // Dynamic Leverage Calculation
+    leverage: {
+        offense: Math.round((home.offRating / (home.offRating + away.offRating)) * 100),
+        defense: Math.round((home.defRating / (home.defRating + away.defRating)) * 100),
+        qb: Math.min(95, Math.max(5, 50 + ((away.tier - home.tier) * 10))) // Based on Tier diff
+    }
   };
 };

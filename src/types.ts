@@ -8,6 +8,7 @@ export interface Team {
   standing?: string;
   status?: 'Clinched' | 'Contender' | 'Bubble' | 'Eliminated';
   keyInjuries?: string[];
+  score?: number; // Live score
 }
 
 export interface Game {
@@ -17,6 +18,8 @@ export interface Game {
   venue: string;
   homeTeam: Team;
   awayTeam: Team;
+  status?: 'pre' | 'in' | 'post'; // Game status
+  clock?: string; // e.g. "10:35 4th"
   bettingData?: {
     spread: string; // e.g. "-3.5"
     total: number;
@@ -64,6 +67,13 @@ export interface AnalysisResult {
     impactOnPassing: 'Low' | 'Moderate' | 'High';
   };
   
+  // New Leverage Data
+  leverage: {
+    offense: number; // Home % (0-100)
+    defense: number; // Home % (0-100)
+    qb: number;      // Home % (0-100)
+  };
+
   // Original fields
   statComparison: any;
   injuryImpact: string;
@@ -77,4 +87,8 @@ export interface UserPrediction {
   homeScore: string;
   awayScore: string;
   predictedWinner: string;
+  // User's manual prediction
+  userHomeScore?: string;
+  userAwayScore?: string;
+  userPredictedWinner?: string;
 }

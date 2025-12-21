@@ -35,12 +35,27 @@ const INJURY_HEADLINES = [
   "Roster Move: Practice squad elevation hints at depth concerns."
 ];
 
-export const generateTeamNews = (team: Team): string[] => {
+export const generateTeamNews = (team: Team, seed?: string): string[] => {
   const news: string[] = [];
+
+  // Helper for consistent random index if seed provided
+  const getIndex = (max: number) => {
+    if (!seed) return Math.floor(Math.random() * max);
+    
+    let hash = 0;
+    const input = seed + team.id; // Unique per team per game
+    for (let i = 0; i < input.length; i++) {
+      const char = input.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    const val = Math.abs((Math.sin(hash) * 10000) % 1);
+    return Math.floor(val * max);
+  };
 
   // 1. Status-based Headline
   const statusPool = HEADLINES[team.status || 'Eliminated'];
-  const randomStatusIndex = Math.floor(Math.random() * statusPool.length);
+  const randomStatusIndex = getIndex(statusPool.length);
   news.push(statusPool[randomStatusIndex]);
 
   // 2. Injury-based Headline (if injuries exist)

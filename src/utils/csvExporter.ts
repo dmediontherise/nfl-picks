@@ -8,9 +8,12 @@ export const downloadPredictionsAsCSV = (schedule: Game[], predictions: Record<s
     "Matchup", 
     "Away Team", 
     "Home Team", 
-    "Predicted Winner", 
-    "Predicted Score (Away)", 
-    "Predicted Score (Home)", 
+    "App Winner", 
+    "App Score (Away)", 
+    "App Score (Home)", 
+    "User Winner",
+    "User Score (Away)",
+    "User Score (Home)",
     "Spread", 
     "Total"
   ];
@@ -23,13 +26,16 @@ export const downloadPredictionsAsCSV = (schedule: Game[], predictions: Record<s
     
     return [
       `Week ${game.week}`,
-      `"${game.date}"`,
+      `"${new Date(game.date).toLocaleDateString()}"`,
       `${away} @ ${home}`,
       game.awayTeam.name,
       game.homeTeam.name,
       pred ? pred.predictedWinner : "N/A",
       pred ? pred.awayScore : "N/A",
       pred ? pred.homeScore : "N/A",
+      pred && pred.userPredictedWinner ? pred.userPredictedWinner : "N/A",
+      pred && pred.userAwayScore ? pred.userAwayScore : "N/A",
+      pred && pred.userHomeScore ? pred.userHomeScore : "N/A",
       game.bettingData?.spread || "N/A",
       game.bettingData?.total || "N/A"
     ].join(",");
