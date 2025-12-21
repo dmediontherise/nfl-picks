@@ -77,50 +77,43 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
       // A. Baseline Tier from Live Record (e.g. "10-4-0")
       let wins = 0;
       if (team.record) {
-          const parts = team.record.split(/[- ]/); // Handle "10-4" or "10-4-0"
+          const parts = team.record.split(/[- ]/);
           wins = parseInt(parts[0]) || 0;
       }
       
-      let dynamicTier = 3; // Default Average
+      let dynamicTier = 3;
       if (wins >= 10) dynamicTier = 1;
       else if (wins >= 8) dynamicTier = 2;
       else if (wins >= 6) dynamicTier = 3;
       else if (wins >= 4) dynamicTier = 4;
       else dynamicTier = 5;
 
-      // B. Baseline Ratings based on Tier
-      // Tier 1: 90-95, Tier 2: 85-90, Tier 3: 80-85, Tier 4: 75-80, Tier 5: <75
       let baseRating = 95 - ((dynamicTier - 1) * 5); 
 
-      // C. Injury/News Impact (The "Live" Factor)
+      // C. Injury/News Impact
       let penalty = 0;
       const combinedNews = [...(team.keyInjuries || []), ...snippets].join(" ").toLowerCase();
       
-      // QB Checks
       const isQBOut = combinedNews.includes("qb") && (combinedNews.includes("out") || combinedNews.includes("ir") || combinedNews.includes("bench"));
       const isStarOut = combinedNews.includes("out") || combinedNews.includes("ir");
       
       if (isQBOut) {
-          penalty += 15; // Massive penalty for backup QB
-          dynamicTier += 2; // Drop 2 tiers (e.g. Tier 1 -> Tier 3)
+          penalty += 15;
+          dynamicTier += 2;
       } else if (isStarOut) {
           penalty += 5;
       }
 
       return {
-          tier: Math.min(5, dynamicTier), // Cap at 5
+          tier: Math.min(5, dynamicTier),
           offRating: Math.max(50, baseRating - penalty),
-          defRating: Math.max(50, baseRating - (penalty / 2)) // Defense less affected by QB injury usually
+          defRating: Math.max(50, baseRating - (penalty / 2))
       };
   };
   
-  // Helper to fetch snippets for specific team
-  const getSnippets = (teamName: string) => realNewsSnippets.filter(s => s.includes(teamName));
+  const homeDynamic = calculateDynamicRatings(home, realNewsSnippets.filter(s => s.includes(home.name)));
+  const awayDynamic = calculateDynamicRatings(away, realNewsSnippets.filter(s => s.includes(away.name)));
 
-  const homeDynamic = calculateDynamicRatings(home, getSnippets(home.name));
-  const awayDynamic = calculateDynamicRatings(away, getSnippets(away.name));
-
-  // Override static data for calculations
   home.tier = homeDynamic.tier;
   home.offRating = homeDynamic.offRating;
   home.defRating = homeDynamic.defRating;
@@ -130,49 +123,76 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   away.defRating = awayDynamic.defRating;
 
   // --- 1. PARSE VEGAS DATA (The Anchor) ---
-  // Use a seeded random generator so every user sees the same score for the same game
+  let vegaSpread = 0;
+  let vegasTotal = 44;
+
+  if (game.bettingData) {
+    vegasTotal = game.bettingData.total;
+    const spreadParts = game.bettingData.spread.split(' ');
+    if (spreadParts.length >= 2) {
+      const favAbbr = spreadParts[0];
+      const points = parseFloat(spreadParts[spreadParts.length - 1]);
+      if (favAbbr === home.abbreviation) vegaSpread = Math.abs(points);
+      else vegaSpread = -Math.abs(points);
+    }
+  }
+
+  let impliedHome = (vegasTotal + vegaSpread) / 2;
+  let impliedAway = (vegasTotal - vegaSpread) / 2;
+
+  // --- 2. APPLY RATINGS ADJUSTMENTS ---
+  const applyInjuryPenalty = (team: typeof home) => {
+    let penalty = 0;
+    team.keyInjuries?.forEach(injury => {
+      if (injury.includes("QB")) penalty += 4;
+      else penalty += 2;
+    });
+    return penalty;
+  };
+
+  const homeInjuryPen = applyInjuryPenalty(home);
+  const awayInjuryPen = applyInjuryPenalty(away);
+
+  const homeMatchupAdvantage = (home.offRating - away.defRating) / 4;
+  const awayMatchupAdvantage = (away.offRating - home.defRating) / 4;
+
+  let finalHomeScore = impliedHome + homeMatchupAdvantage - homeInjuryPen + newsModHome;
+  let finalAwayScore = impliedAway + awayMatchupAdvantage - awayInjuryPen + newsModAway;
+
+  // --- 3. APPLY VARIANCE (DETERMINISTIC) ---
   const getSeededRandom = (seed: string) => {
     let hash = 0;
     for (let i = 0; i < seed.length; i++) {
-      const char = seed.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; 
+      hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+      hash |= 0;
     }
     const x = Math.sin(hash) * 10000;
     return x - Math.floor(x);
   };
 
   const rng = getSeededRandom(game.id + "_variance_v1");
-  const variance = (rng * 6) - 3; // +/- 3 points, but consistent per game
+  const variance = (rng * 6) - 3; 
   
-  // Refresh variance is removed to ensure consistency across users/devices
-  const refreshVariance = 0; 
+  finalHomeScore += variance;
+  finalAwayScore -= variance;
 
-  finalHomeScore += variance + refreshVariance;
-  finalAwayScore -= (variance + refreshVariance); // Often correlations are inverse in tight games
-
-  // --- 4. SAFETY CLAMP (No 1-point scores) ---
+  // --- 4. SAFETY CLAMP ---
   const clampScore = (score: number) => {
     let s = Math.round(score);
-    if (s <= 1) return 0; // Shutout likely if projected <= 1
-    if (s === 1) return 0; // Impossible
-    if (s === 4) return 3; // Very rare, round to FG
-    // Bias towards common numbers slightly? No, randomness is fine, just fix the impossible ones.
+    if (s <= 1) return 0;
+    if (s === 4) return 3;
     return Math.max(0, s);
   };
 
   finalHomeScore = clampScore(finalHomeScore);
   finalAwayScore = clampScore(finalAwayScore);
 
-  // Resolve Tie if Variance dictates (optional, draws happen but let's avoid for prediction clarity)
   if (finalHomeScore === finalAwayScore) {
     if (home.offRating > away.offRating) finalHomeScore += 3;
     else finalAwayScore += 3;
   }
 
   const winner = finalHomeScore > finalAwayScore ? home.name : away.name;
-  
-  // Restore required variables for narrative and grading
   const homeNews = generateTeamNews(home, game.id);
   const awayNews = generateTeamNews(away, game.id);
   const spreadCovered = (winner === home.name && (finalHomeScore - finalAwayScore) > vegaSpread) ||
@@ -196,7 +216,6 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
   // --- NARRATIVE GENERATOR (SMART) ---
   const constructNarrative = () => {
-      // 1. Context & Motivation
       const homeStatus = home.status || "Bubble";
       const awayStatus = away.status || "Bubble";
       let contextStory = "";
@@ -211,7 +230,6 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
           contextStory = `A gritty late-season battle between ${game.awayTeam.abbreviation} and ${game.homeTeam.abbreviation} where pride and execution outweigh the standings.`;
       }
 
-      // 2. Spread & Public Sentiment Analysis
       let bettingStory = "";
       const projectedMargin = finalHomeScore - finalAwayScore;
       const vegasMargin = vegaSpread;
@@ -224,37 +242,17 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
           bettingStory = `The fundamental data (Home Offense: ${home.offRating} vs Away Defense: ${away.defRating}) aligns closely with the market sentiment for this ${game.homeTeam.abbreviation} home game.`;
       }
 
-      // 3. Weave in the News (The "Why")
       let newsStory = "";
-      let playerMentions: string[] = [];
-      
-      // Combine Real News and Key Injuries
       const criticalNews = [...realNewsSnippets];
-      
-      // Fallback: If no real news, use the best generated headline from newsFactory
       if (criticalNews.length === 0) {
            const hNews = homeNews.filter(n => !n.includes("Mock Draft") && !n.includes("Power Rankings"));
            const aNews = awayNews.filter(n => !n.includes("Mock Draft") && !n.includes("Power Rankings"));
-           
            if (hNews.length > 0) criticalNews.push(`INSIDER (${home.abbreviation}): ${hNews[0]}`);
            else if (aNews.length > 0) criticalNews.push(`INSIDER (${away.abbreviation}): ${aNews[0]}`);
       }
 
-      if (home.keyInjuries?.length) criticalNews.push(`INJURY ALERT (${home.abbreviation}): ${home.keyInjuries[0]}`);
-      if (away.keyInjuries?.length) criticalNews.push(`INJURY ALERT (${away.abbreviation}): ${away.keyInjuries[0]}`);
-
       if (criticalNews.length > 0) {
-          // Extract Player Names for "Players to Watch"
-          const nameRegex = /([A-Z][a-z]+ [A-Z][a-z]+)/g;
-          criticalNews.forEach(news => {
-              const matches = news.match(nameRegex);
-              if (matches) playerMentions.push(...matches);
-          });
-
-          // Pick the most impactful story (prioritize Injury or Real News)
           const priorityNews = criticalNews.find(n => n.includes("INJURY") || n.includes("NEWS")) || criticalNews[0];
-
-          // Clean snippet
           const cleanNews = (snippet: string) => snippet.replace(/NEWS \([A-Z]+\): /, "").replace(/INJURY ALERT \([A-Z]+\): /, "").replace(/INSIDER \([A-Z]+\): /, "").replace(/^—\s*/, "").trim();
           const mainStory = cleanNews(priorityNews);
           
@@ -267,7 +265,6 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
           newsStory = `With no major roster shakeups reported for the ${game.awayTeam.abbreviation} or ${game.homeTeam.abbreviation}, the focus shifts entirely to schematic execution.`;
       }
 
-      // 4. The Prediction Logic (Synthesis)
       const logic = `Verdict: The Medi Picks engine projects the ${winner} to win by ${Math.abs(finalHomeScore - finalAwayScore)} points, leveraging their ${home.offRating > away.offRating ? 'offensive' : 'defensive'} advantage in the ${game.homeTeam.abbreviation} stadium.`;
 
       return `${contextStory}\n\n${bettingStory}\n\n${newsStory}\n\n**Analysis:** ${logic}`;
@@ -278,7 +275,6 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
   // Dynamic Players to Watch
   const generatePlayersToWatch = () => {
-      // 1. Try to find from News
       const newsPlayers = narrative.match(/([A-Z][a-z]+ [A-Z][a-z]+)/g);
       if (newsPlayers && newsPlayers.length >= 2) {
           return [
@@ -286,50 +282,27 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
               { name: newsPlayers[1], position: "X-FACTOR", projection: "Game Changer", reasoning: "Cited in game intel." }
           ];
       }
-      
-      // 2. Fallback to generic "Star" logic based on Team Data
-      const homeStar = home.keyInjuries?.[0]?.split(' ')[0] || "QB1";
-      const awayStar = away.keyInjuries?.[0]?.split(' ')[0] || "QB1";
-      
       return [
         { name: `${winner} Offense`, position: "UNIT", projection: "Over 350 Yards", reasoning: "Matchup mismatch." },
         { name: `${winner === home.name ? away.name : home.name} Defense`, position: "UNIT", projection: "Must force 2+ TOs", reasoning: "Critical for upset chance." }
       ];
   };
 
-  const injuryNews = forceRefresh 
-    ? "LATEST: " + (home.keyInjuries?.[0] || "No major changes") + " - situations fluid."
-    : (home.keyInjuries?.length || away.keyInjuries?.length) ? "Significant injury impact." : "Clean bill of health.";
+  const injuryNews = (home.keyInjuries?.length || away.keyInjuries?.length) ? "Significant injury impact." : "Clean bill of health.";
 
-    // --- 5. DYNAMIC METRICS (Execution & Explosiveness) ---
-    
-    // Explosive Rating: Correlates with Offensive Talent vs Defensive Weakness + High Totals
-    // Base: Average of Home/Away Dynamic OffRatings
-    // Boost: If Vegas Total > 47 (+5), > 50 (+10)
-    // Boost: Mismatches (OffRating - Opp DefRating > 10)
+    // --- 5. DYNAMIC METRICS ---
     const avgOffense = (home.offRating + away.offRating) / 2;
     let explosiveCalc = avgOffense;
-    
     if (game.bettingData) {
         if (game.bettingData.total > 50) explosiveCalc += 10;
         else if (game.bettingData.total > 46) explosiveCalc += 5;
         else if (game.bettingData.total < 40) explosiveCalc -= 10;
     }
-    
-    // Mismatch Bonus
-    if ((home.offRating - away.defRating) > 10 || (away.offRating - home.defRating) > 10) {
-        explosiveCalc += 8;
-    }
+    if ((home.offRating - away.defRating) > 10 || (away.offRating - home.defRating) > 10) explosiveCalc += 8;
     const finalExplosiveRating = Math.min(99, Math.round(explosiveCalc));
 
-    // Execution Rating: Correlates with Confidence & Team Quality (Tier)
-    // High Confidence = High Probability of Clean Execution
-    // Tier 1 Teams execute better than Tier 4
     const avgTier = (home.tier + away.tier) / 2;
-    
-    // Lower tier number is better (1 is best). So (6 - avgTier) gives 5 for Tier 1, 1 for Tier 5.
-    const qualityFactor = (6 - avgTier) * 5; // Max 25 points
-    
+    const qualityFactor = (6 - avgTier) * 5; 
     const finalExecutionRating = Math.min(99, Math.round((predictionConfidence * 0.6) + qualityFactor + 20));
 
   return {
@@ -356,14 +329,10 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     explosiveRating: finalExplosiveRating,
     quickTake: Math.abs(finalHomeScore - finalAwayScore) > 10 ? "Mismatch" : "Close Game",
     latestNews: [...realNewsSnippets, ...homeNews.map(n => `[${home.abbreviation}] ${n}`), ...awayNews.map(n => `[${away.abbreviation}] ${n}`)],
-    
-    // Dynamic Leverage Calculation (Weighted Differential)
-    // Formula: 50 + (HomeRating - AwayRating) * Multiplier
-    // This pushes the leverage meters further to the edges for visual clarity
     leverage: {
         offense: Math.min(95, Math.max(5, 50 + (home.offRating - away.offRating) * 1.5)),
         defense: Math.min(95, Math.max(5, 50 + (home.defRating - away.defRating) * 1.5)),
-        qb: Math.min(95, Math.max(5, 50 + ((away.tier - home.tier) * 15))) // Increased tier impact
+        qb: Math.min(95, Math.max(5, 50 + ((away.tier - home.tier) * 15))) 
     }
   };
 };
