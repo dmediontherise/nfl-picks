@@ -229,6 +229,17 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
       
       // Combine Real News and Key Injuries
       const criticalNews = [...realNewsSnippets];
+      
+      // Fallback: If no real news, use the best generated headline from newsFactory
+      // We prioritize Status or specific Injury headlines over generic ones
+      if (criticalNews.length === 0) {
+           const hNews = homeNews.filter(n => !n.includes("Mock Draft") && !n.includes("Power Rankings"));
+           const aNews = awayNews.filter(n => !n.includes("Mock Draft") && !n.includes("Power Rankings"));
+           
+           if (hNews.length > 0) criticalNews.push(`INSIDER (${home.abbreviation}): ${hNews[0]}`);
+           else if (aNews.length > 0) criticalNews.push(`INSIDER (${away.abbreviation}): ${aNews[0]}`);
+      }
+
       if (home.keyInjuries?.length) criticalNews.push(`INJURY ALERT (${home.abbreviation}): ${home.keyInjuries[0]}`);
       if (away.keyInjuries?.length) criticalNews.push(`INJURY ALERT (${away.abbreviation}): ${away.keyInjuries[0]}`);
 
@@ -240,22 +251,27 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
               if (matches) playerMentions.push(...matches);
           });
 
+          // Pick the most impactful story (prioritize Injury or Real News over Insider/Generated)
+          const priorityNews = criticalNews.find(n => n.includes("INJURY") || n.includes("NEWS")) || criticalNews[0];
+
           // Clean snippet
-          const cleanNews = (snippet: string) => snippet.replace(/NEWS \([A-Z]+\): /, "").replace(/INJURY ALERT \([A-Z]+\): /, "").replace(/^—\s*/, "").trim();
-          const mainStory = cleanNews(criticalNews[0]);
+          const cleanNews = (snippet: string) => snippet.replace(/NEWS \([A-Z]+\): /, "").replace(/INJURY ALERT \([A-Z]+\): /, "").replace(/INSIDER \([A-Z]+\): /, "").replace(/^—\s*/, "").trim();
+          const mainStory = cleanNews(priorityNews);
           
           if (mainStory.toLowerCase().includes("injury") || mainStory.toLowerCase().includes("out")) {
-              newsStory = `Crucially, the situation surrounding "${mainStory}" has forced a significant downgrade in our offensive efficiency metrics.`;
+              newsStory = `Crucially, the situation surrounding "${mainStory}" has forced a significant downgrade in our offensive efficiency metrics for the ${mainStory.includes(home.name) ? home.name : "affected unit"}.`;
           } else if (mainStory.toLowerCase().includes("return") || mainStory.toLowerCase().includes("active")) {
-               newsStory = `The return of key personnel ("${mainStory}") provides a timely boost to the explosive play rating.`;
+               newsStory = `The return of key personnel ("${mainStory}") provides a timely boost to the explosive play rating that could catch the ${winner === home.name ? away.name : home.name} sleeping.`;
+          } else if (mainStory.includes("Playoff") || mainStory.includes("Seed")) {
+               newsStory = `The postseason implications are driving the narrative: "${mainStory}". This added pressure often favors the more disciplined squad.`;
           } else {
               newsStory = `Narrative factor: "${mainStory}". This variable introduces volatility that pure stats might miss.`;
           }
       } else {
-          // Fallback based on ratings
+          // Fallback based on ratings (Rarely reached now with generated news)
           const offDiff = Math.abs(home.offRating - away.offRating);
-          if (offDiff > 10) newsStory = "Disparities in offensive firepower are the primary driver here, with one unit simply outclassing the other.";
-          else newsStory = "With no major roster shakeups reported, the focus shifts entirely to schematic execution and turnover variance.";
+          if (offDiff > 10) newsStory = `Disparities in offensive firepower are the primary driver here, with the ${home.offRating > away.offRating ? home.name : away.name} simply outclassing the opposition.`;
+          else newsStory = `With both locker rooms relatively quiet, the focus shifts entirely to schematic execution. The ${winner} has shown better discipline in late-game scenarios.`;
       }
 
       // 4. The Prediction Logic (Synthesis)
