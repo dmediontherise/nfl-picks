@@ -14,124 +14,7 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   let home = { ...getTeamData(game.homeTeam) };
   let away = { ...getTeamData(game.awayTeam) };
 
-  // --- 0. DYNAMIC RATINGS ENGINE (Smart Adjustments) ---
-  const calculateDynamicRatings = (team: typeof home, newsSnippets: string[]) => {
-      // A. Baseline Tier from Live Record (e.g. "10-4-0")
-      let wins = 0;
-      if (team.record) {
-          const parts = team.record.split(/[- ]/); // Handle "10-4" or "10-4-0"
-          wins = parseInt(parts[0]) || 0;
-      }
-      
-      let dynamicTier = 3; // Default Average
-      if (wins >= 10) dynamicTier = 1;
-      else if (wins >= 8) dynamicTier = 2;
-      else if (wins >= 6) dynamicTier = 3;
-      else if (wins >= 4) dynamicTier = 4;
-      else dynamicTier = 5;
-
-      // B. Baseline Ratings based on Tier
-      // Tier 1: 90-95, Tier 2: 85-90, Tier 3: 80-85, Tier 4: 75-80, Tier 5: <75
-      let baseRating = 95 - ((dynamicTier - 1) * 5); 
-
-      // C. Injury/News Impact (The "Live" Factor)
-      let penalty = 0;
-      const combinedNews = [...(team.keyInjuries || []), ...newsSnippets].join(" ").toLowerCase();
-      
-      // QB Checks
-      const isQBOut = combinedNews.includes("qb") && (combinedNews.includes("out") || combinedNews.includes("ir") || combinedNews.includes("bench"));
-      const isStarOut = combinedNews.includes("out") || combinedNews.includes("ir");
-      
-      if (isQBOut) {
-          penalty += 15; // Massive penalty for backup QB
-          dynamicTier += 2; // Drop 2 tiers (e.g. Tier 1 -> Tier 3)
-      } else if (isStarOut) {
-          penalty += 5;
-      }
-
-      // D. Recent Form (Mock Logic: streaks would go here)
-      // For now, simple record-based is fine.
-
-      return {
-          tier: Math.min(5, dynamicTier), // Cap at 5
-          offRating: Math.max(50, baseRating - penalty),
-          defRating: Math.max(50, baseRating - (penalty / 2)) // Defense less affected by QB injury usually
-      };
-  };
-  
-  // Helper to fetch snippets for specific team
-  const getSnippets = (teamName: string) => realNewsSnippets.filter(s => s.includes(teamName));
-
-  const homeDynamic = calculateDynamicRatings(home, getSnippets(home.name));
-  const awayDynamic = calculateDynamicRatings(away, getSnippets(away.name));
-
-  // Override static data for calculations
-  home.tier = homeDynamic.tier;
-  home.offRating = homeDynamic.offRating;
-  home.defRating = homeDynamic.defRating;
-  
-  away.tier = awayDynamic.tier;
-  away.offRating = awayDynamic.offRating;
-  away.defRating = awayDynamic.defRating;
-
-  // --- 1. PARSE VEGAS DATA (The Anchor) ---
-  let vegaSpread = 0;
-  let vegasTotal = 44; // Default NFL total if missing
-
-  if (game.bettingData) {
-    vegasTotal = game.bettingData.total;
-    // Parse spread string like "BUF -13.5" or "SEA -1.5"
-    // We need to determine WHO the spread applies to relative to Home/Away
-    const spreadParts = game.bettingData.spread.split(' ');
-    if (spreadParts.length === 2) {
-      const favAbbr = spreadParts[0];
-      const points = parseFloat(spreadParts[1]); // e.g. -13.5
-      
-      // If Home is Favorite (e.g. BUF -13.5 and BUF is home) -> Home favored by 13.5
-      // If Away is Favorite (e.g. KC -3.5 and KC is away) -> Home is underdog (+3.5) -> Spread relative to home is -3.5 * -1 = +3.5?
-      // Simpler: Just get the absolute line and apply to the favorite.
-      
-      if (favAbbr === home.abbreviation) {
-        vegaSpread = Math.abs(points); // Home is favored by X
-      } else {
-        vegaSpread = -Math.abs(points); // Home is underdog by X
-      }
-    }
-  }
-
-  // Calculate Implied Vegas Score
-  // Home = (Total + Spread) / 2
-  // Away = (Total - Spread) / 2
-  // Example: Total 45, Home -3.5 (Fav). Home = (45 + 3.5)/2 = 24.25. Away = (45 - 3.5)/2 = 20.75.
-  // Example: Total 45, Home -3.5 (Dog? No, spread is negative for fav).
-  // Let's stick to: Spread is positive if Home is favored, negative if Away is favored.
-  // Wait, standard notation: "BUF -13.5" means BUF is favored.
-  // So if Home is Fav, spread > 0. 
-  
-  let impliedHome = (vegasTotal + vegaSpread) / 2;
-  let impliedAway = (vegasTotal - vegaSpread) / 2;
-
-  // --- 2. APPLY MEDI JINX RATINGS (The Adjustment) ---
-  
-  // Injury Penalty
-  const applyInjuryPenalty = (team: typeof home) => {
-    let penalty = 0;
-    team.keyInjuries?.forEach(injury => {
-      if (injury.includes("Mahomes") || injury.includes("Rodgers") || injury.includes("Burrow")) penalty += 7; 
-      else if (injury.includes("QB")) penalty += 4;
-      else penalty += 2;
-    });
-    return penalty;
-  };
-
-  const homeInjuryPen = applyInjuryPenalty(home);
-  const awayInjuryPen = applyInjuryPenalty(away);
-
-  // Matchup Advantage
-  const homeMatchupAdvantage = (home.offRating - away.defRating) / 4;
-  const awayMatchupAdvantage = (away.offRating - home.defRating) / 4;
-
-  // --- 2.5 REAL NEWS INTEGRATION ---
+  // --- PRE-FETCH REAL NEWS (Used for Dynamic Ratings) ---
   let newsModHome = 0;
   let newsModAway = 0;
   let realNewsSnippets: string[] = [];
@@ -189,11 +72,64 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     console.warn("News integration skipped:", e);
   }
 
-  // Apply to Implied Scores (Including Real News Impact)
-  let finalHomeScore = impliedHome + homeMatchupAdvantage - homeInjuryPen + newsModHome;
-  let finalAwayScore = impliedAway + awayMatchupAdvantage - awayInjuryPen + newsModAway;
+  // --- 0. DYNAMIC RATINGS ENGINE (Smart Adjustments) ---
+  const calculateDynamicRatings = (team: typeof home, snippets: string[]) => {
+      // A. Baseline Tier from Live Record (e.g. "10-4-0")
+      let wins = 0;
+      if (team.record) {
+          const parts = team.record.split(/[- ]/); // Handle "10-4" or "10-4-0"
+          wins = parseInt(parts[0]) || 0;
+      }
+      
+      let dynamicTier = 3; // Default Average
+      if (wins >= 10) dynamicTier = 1;
+      else if (wins >= 8) dynamicTier = 2;
+      else if (wins >= 6) dynamicTier = 3;
+      else if (wins >= 4) dynamicTier = 4;
+      else dynamicTier = 5;
 
-  // --- 3. APPLY VARIANCE (DETERMINISTIC) ---
+      // B. Baseline Ratings based on Tier
+      // Tier 1: 90-95, Tier 2: 85-90, Tier 3: 80-85, Tier 4: 75-80, Tier 5: <75
+      let baseRating = 95 - ((dynamicTier - 1) * 5); 
+
+      // C. Injury/News Impact (The "Live" Factor)
+      let penalty = 0;
+      const combinedNews = [...(team.keyInjuries || []), ...snippets].join(" ").toLowerCase();
+      
+      // QB Checks
+      const isQBOut = combinedNews.includes("qb") && (combinedNews.includes("out") || combinedNews.includes("ir") || combinedNews.includes("bench"));
+      const isStarOut = combinedNews.includes("out") || combinedNews.includes("ir");
+      
+      if (isQBOut) {
+          penalty += 15; // Massive penalty for backup QB
+          dynamicTier += 2; // Drop 2 tiers (e.g. Tier 1 -> Tier 3)
+      } else if (isStarOut) {
+          penalty += 5;
+      }
+
+      return {
+          tier: Math.min(5, dynamicTier), // Cap at 5
+          offRating: Math.max(50, baseRating - penalty),
+          defRating: Math.max(50, baseRating - (penalty / 2)) // Defense less affected by QB injury usually
+      };
+  };
+  
+  // Helper to fetch snippets for specific team
+  const getSnippets = (teamName: string) => realNewsSnippets.filter(s => s.includes(teamName));
+
+  const homeDynamic = calculateDynamicRatings(home, getSnippets(home.name));
+  const awayDynamic = calculateDynamicRatings(away, getSnippets(away.name));
+
+  // Override static data for calculations
+  home.tier = homeDynamic.tier;
+  home.offRating = homeDynamic.offRating;
+  home.defRating = homeDynamic.defRating;
+  
+  away.tier = awayDynamic.tier;
+  away.offRating = awayDynamic.offRating;
+  away.defRating = awayDynamic.defRating;
+
+  // --- 1. PARSE VEGAS DATA (The Anchor) ---
   // Use a seeded random generator so every user sees the same score for the same game
   const getSeededRandom = (seed: string) => {
     let hash = 0;
