@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Trophy, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { X, Trophy, TrendingUp } from 'lucide-react';
 import { UserPrediction } from './types';
 
 interface GameResult {
@@ -20,45 +20,7 @@ interface StandingsModalProps {
 
 export const StandingsModal: React.FC<StandingsModalProps> = ({ onClose, predictions, results }) => {
     
-    const calculateRecord = (isUser: boolean) => {
-        let wins = 0;
-        let losses = 0;
-        let atsWins = 0;
-        let atsLosses = 0;
-        let atsPushes = 0;
-
-        Object.keys(results).forEach(gameId => {
-            const pred = predictions[gameId];
-            const result = results[gameId];
-            if (!pred || !result) return;
-
-            // Determine Prediction
-            const winnerPick = isUser ? pred.userPredictedWinner : pred.predictedWinner;
-            const homeScorePick = isUser ? parseInt(pred.userHomeScore || "0") : parseInt(pred.homeScore); // Not used for winner calc directly
-            
-            if (!winnerPick) return;
-
-            // 1. Outright Winner
-            const actualWinner = result.homeScore > result.awayScore ? result.homeAbbr : result.awayAbbr;
-            // The prediction stores "Name" (e.g. Buffalo Bills), result stores Abbr usually if I saved it that way.
-            // Wait, my result storage plan needs to store Names or Abbrs consistently.
-            // Let's assume we match on Name if possible, or Abbr.
-            // In App.tsx I'll ensure I save Names or mapped Abbrs.
-            // Let's assume prediction.predictedWinner is the Full Name.
-            // We need to compare correctly.
-            // Simplification: Check if the picked Team Name matches the actual winner.
-            // Since I don't have the full Team Name in 'results' unless I save it, I should save it.
-            
-            // Re-evaluating: I'll save the 'winnerName' in results.
-        });
-        
-        return { wins, losses, atsWins, atsLosses, atsPushes };
-    };
-
-    // ... I'll implement the full logic inside the main render for simplicity of state access 
-    // actually, let's keep it here but I need to ensure data compatibility.
-    
-    // Improved Logic:
+    // Logic:
     let userRecord = { w: 0, l: 0, atsW: 0, atsL: 0, atsP: 0 };
     let appRecord = { w: 0, l: 0, atsW: 0, atsL: 0, atsP: 0 };
 
@@ -67,7 +29,7 @@ export const StandingsModal: React.FC<StandingsModalProps> = ({ onClose, predict
         const pred = predictions[gameId];
         if (!pred) return; // No prediction for this game
 
-        const actualWinnerName = res.homeScore > res.awayScore ? res.homeName : res.awayName; // Need Names in Result
+        const actualWinnerName = res.homeScore > res.awayScore ? res.homeName : res.awayName; 
         
         // --- User ---
         if (pred.userPredictedWinner) {
@@ -78,7 +40,7 @@ export const StandingsModal: React.FC<StandingsModalProps> = ({ onClose, predict
                  const parts = res.spread.split(' ');
                  if (parts.length >= 2) {
                      const favAbbr = parts[0];
-                     const line = parseFloat(parts[1]);
+                     const line = parseFloat(parts[parts.length - 1]);
                      const margin = favAbbr === res.homeAbbr ? (res.homeScore - res.awayScore) : (res.awayScore - res.homeScore);
                      const diff = margin + line;
                      
@@ -100,7 +62,7 @@ export const StandingsModal: React.FC<StandingsModalProps> = ({ onClose, predict
                  const parts = res.spread.split(' ');
                  if (parts.length >= 2) {
                      const favAbbr = parts[0];
-                     const line = parseFloat(parts[1]);
+                     const line = parseFloat(parts[parts.length - 1]);
                      const margin = favAbbr === res.homeAbbr ? (res.homeScore - res.awayScore) : (res.awayScore - res.homeScore);
                      const diff = margin + line;
                      
