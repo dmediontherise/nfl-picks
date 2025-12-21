@@ -368,11 +368,43 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     ? "LATEST: " + (home.keyInjuries?.[0] || "No major changes") + " - situations fluid."
     : (home.keyInjuries?.length || away.keyInjuries?.length) ? "Significant injury impact." : "Clean bill of health.";
 
+    // --- 5. DYNAMIC METRICS (Execution & Explosiveness) ---
+    
+    // Explosive Rating: Correlates with Offensive Talent vs Defensive Weakness + High Totals
+    // Base: Average of Home/Away Dynamic OffRatings
+    // Boost: If Vegas Total > 47 (+5), > 50 (+10)
+    // Boost: Mismatches (OffRating - Opp DefRating > 10)
+    const avgOffense = (home.offRating + away.offRating) / 2;
+    let explosiveCalc = avgOffense;
+    
+    if (game.bettingData) {
+        if (game.bettingData.total > 50) explosiveCalc += 10;
+        else if (game.bettingData.total > 46) explosiveCalc += 5;
+        else if (game.bettingData.total < 40) explosiveCalc -= 10;
+    }
+    
+    // Mismatch Bonus
+    if ((home.offRating - away.defRating) > 10 || (away.offRating - home.defRating) > 10) {
+        explosiveCalc += 8;
+    }
+    const finalExplosiveRating = Math.min(99, Math.round(explosiveCalc));
+
+    // Execution Rating: Correlates with Confidence & Team Quality (Tier)
+    // High Confidence = High Probability of Clean Execution
+    // Tier 1 Teams execute better than Tier 4
+    const predictionConfidence = Math.min(99, Math.round(50 + Math.abs(finalHomeScore - finalAwayScore) * 2));
+    const avgTier = (home.tier + away.tier) / 2;
+    
+    // Lower tier number is better (1 is best). So (6 - avgTier) gives 5 for Tier 1, 1 for Tier 5.
+    const qualityFactor = (6 - avgTier) * 5; // Max 25 points
+    
+    const finalExecutionRating = Math.min(99, Math.round((predictionConfidence * 0.6) + qualityFactor + 20));
+
   return {
     winnerPrediction: winner,
     homeScorePrediction: finalHomeScore,
     awayScorePrediction: finalAwayScore,
-    confidenceScore: Math.min(99, Math.round(50 + Math.abs(finalHomeScore - finalAwayScore) * 2)),
+    confidenceScore: predictionConfidence,
     summary: `${winner} wins ${finalHomeScore}-${finalAwayScore}`,
     narrative: narrative,
     keyFactors: [`ATS Trend: ${spreadCovered ? "Likely Cover" : "Trap Line"}`, `Turnover Margin`, `Red Zone Efficiency`],
@@ -388,8 +420,8 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     jinxScore: Math.abs(finalHomeScore - finalAwayScore) < 7 ? 8 : 3,
     upsetProbability: 30,
     weather: { temp: 42, condition: "Clear", windSpeed: 5, impactOnPassing: "Low" },
-    executionRating: 85,
-    explosiveRating: 78,
+    executionRating: finalExecutionRating,
+    explosiveRating: finalExplosiveRating,
     quickTake: Math.abs(finalHomeScore - finalAwayScore) > 10 ? "Mismatch" : "Close Game",
     latestNews: [...realNewsSnippets, ...homeNews.map(n => `[${home.abbreviation}] ${n}`), ...awayNews.map(n => `[${away.abbreviation}] ${n}`)],
     
