@@ -54,35 +54,22 @@ export const espnApi = {
             const away = comp.competitors.find((c: any) => c.homeAway === 'away');
             const odds = comp.odds ? comp.odds[0] : null;
 
-            // DYNAMIC MARKET SIMULATOR (Updates every 60s)
-            const generatePublicMoney = (gameId: string, spreadStr: string) => {
-                // 1. Calculate Base Sentiment from Spread
-                // Public favors the Favorite (negative spread)
-                let base = 50;
-                if (spreadStr) {
-                    const parts = spreadStr.split(' ');
-                    const val = parseFloat(parts[parts.length - 1]);
-                    if (!isNaN(val)) {
-                        // If Favorite is -10, public usually bets it (e.g. 50 + 10 = 60%)
-                        // If Favorite is -3, public is split (50 + 3 = 53%)
-                        base = 50 + Math.abs(val);
-                    }
-                }
+            const extractQBStats = (competitor: any) => {
+                const passingLeader = competitor.leaders?.find((l: any) => l.name === 'passingLeader')?.leaders?.[0];
+                if (!passingLeader) return undefined;
 
-                // 2. Deterministic Minute-by-Minute Fluctuation
-                const minute = Math.floor(Date.now() / 60000);
-                const seed = `${gameId}-${minute}`;
-                let hash = 0;
-                for (let i = 0; i < seed.length; i++) {
-                    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-                    hash |= 0;
-                }
-                const fluctuation = (Math.abs(Math.sin(hash)) * 10) - 5; // +/- 5% change every min
+                const dv = passingLeader.displayValue || "";
+                // Format: "357/522, 3931 YDS, 26 TD, 10 INT"
+                const tds = parseInt(dv.match(/(\d+)\s*TD/)?.[1] || "0");
+                const ints = parseInt(dv.match(/(\d+)\s*INT/)?.[1] || "0");
                 
-                return Math.max(10, Math.min(90, Math.round(base + fluctuation)));
+                return {
+                    name: passingLeader.athlete?.fullName,
+                    passingYds: passingLeader.value || 0,
+                    passingTds: tds,
+                    interceptions: ints
+                };
             };
-
-            const publicPct = odds ? generatePublicMoney(event.id, odds.details) : 50;
 
             return {
                 id: event.id,
@@ -92,13 +79,14 @@ export const espnApi = {
                 status: event.status.type.state, // 'pre', 'in', 'post'
                 clock: event.status.type.detail, // e.g. "Final", "10:00 - 1st"
                 homeTeam: {
-                    id: home.team.abbreviation, // Use abbr as ID for consistency with local data
+                    id: home.team.abbreviation, 
                     name: home.team.displayName,
                     abbreviation: home.team.abbreviation,
                     logoUrl: home.team.logo,
                     color: `#${home.team.color}`,
                     record: home.records?.[0]?.summary || "0-0",
                     score: parseInt(home.score),
+                    qbStats: extractQBStats(home)
                 },
                 awayTeam: {
                     id: away.team.abbreviation,
@@ -108,6 +96,7 @@ export const espnApi = {
                     color: `#${away.team.color}`,
                     record: away.records?.[0]?.summary || "0-0",
                     score: parseInt(away.score),
+                    qbStats: extractQBStats(away)
                 },
                 bettingData: odds ? {
                     spread: odds.details, // e.g. "BUF -10.5"

@@ -74,7 +74,7 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
   // --- 0. DYNAMIC RATINGS ENGINE (Smart Adjustments) ---
   const calculateDynamicRatings = (team: typeof home, snippets: string[]) => {
-      // A. Baseline Tier from Live Record (e.g. "10-4-0")
+      // A. Baseline Tier from Live Record
       let wins = 0;
       if (team.record) {
           const parts = team.record.split(/[- ]/);
@@ -87,6 +87,25 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
       else if (wins >= 6) dynamicTier = 3;
       else if (wins >= 4) dynamicTier = 4;
       else dynamicTier = 5;
+
+      // B. QB Individual Performance Adjustment (REAL-TIME STATS)
+      let qbBoost = 0;
+      if (team.qbStats) {
+          const { passingTds, interceptions, passingYds } = team.qbStats;
+          // Calculate an efficiency score (Season-to-date context)
+          // Average QB at Week 16 might have ~20 TDs, ~10 INTs, ~3000 YDS
+          const tdIntRatio = passingTds / (interceptions || 1);
+          const ydsPerGame = passingYds / 15; // Rough week estimate
+
+          if (tdIntRatio > 2.5 && ydsPerGame > 250) qbBoost = 10;
+          else if (tdIntRatio > 1.5 && ydsPerGame > 200) qbBoost = 5;
+          else if (tdIntRatio < 1.0) qbBoost = -10;
+
+          // Force elite tier for truly elite stat lines (like Dak/Herbert)
+          if (tdIntRatio > 2.0 && passingTds > 25) {
+              dynamicTier = Math.max(1, dynamicTier - 1); // Move up a tier
+          }
+      }
 
       let baseRating = 95 - ((dynamicTier - 1) * 5); 
 
@@ -105,8 +124,8 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
       }
 
       return {
-          tier: Math.min(5, dynamicTier),
-          offRating: Math.max(50, baseRating - penalty),
+          tier: Math.min(5, Math.max(1, dynamicTier)),
+          offRating: Math.max(50, baseRating + qbBoost - penalty),
           defRating: Math.max(50, baseRating - (penalty / 2))
       };
   };
@@ -317,8 +336,8 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     coachingMatchup: home.tier < away.tier ? "Coaching Advantage" : "Even Matchup",
     playersToWatch: generatePlayersToWatch(),
     statComparison: {
-      home: [home.offRating, home.defRating, 75, 50, 80],
-      away: [away.offRating, away.defRating, 70, 60, 75]
+      home: [home.offRating, home.defRating, home.qbStats?.passingTds || 0, home.qbStats?.passingYds || 0, home.qbStats?.interceptions || 0],
+      away: [away.offRating, away.defRating, away.qbStats?.passingTds || 0, away.qbStats?.passingYds || 0, away.qbStats?.interceptions || 0]
     },
     sources: [{ title: "Action Network Intel", uri: "#" }],
     jinxAnalysis: jinxAnalysisText,

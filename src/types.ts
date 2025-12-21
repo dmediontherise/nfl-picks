@@ -9,6 +9,12 @@ export interface Team {
   status?: 'Clinched' | 'Contender' | 'Bubble' | 'Eliminated';
   keyInjuries?: string[];
   score?: number; // Live score
+  qbStats?: {
+    passingYds: number;
+    passingTds: number;
+    interceptions: number;
+    name?: string;
+  };
 }
 
 export interface Game {
