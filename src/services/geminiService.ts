@@ -317,7 +317,7 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
           newsStory += `With no major roster shakeups reported, the focus shifts entirely to schematic execution and turnover margin.`;
       }
 
-      const logic = `### Verdict\nThe Medi Picks engine projects the **${winner}** to win by ${Math.abs(finalHomeScore - finalAwayScore)} points. This is driven by a synthesis of ${home.tier < away.tier ? 'superior coaching tiers' : 'comparative stat advantages'} and the current momentum reflected in the live ${meta?.week || 'Week 16'} record.`;
+      const logic = `### Verdict\nThe Medi Picks engine projects the **${winner}** to win by ${Math.abs(finalHomeScore - finalAwayScore)} points. This is driven by a synthesis of ${home.tier < away.tier ? 'superior coaching tiers' : 'comparative stat advantages'} and the current momentum reflected in the live standings.`;
 
       return `${contextStory}\n\n${qbStory}\n\n${unitStory}\n\n${bettingStory}\n\n${newsStory}\n\n${logic}`;
   };
