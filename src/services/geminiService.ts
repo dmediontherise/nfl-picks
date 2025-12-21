@@ -178,65 +178,47 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   const spreadCovered = (winner === home.name && (finalHomeScore - finalAwayScore) > vegaSpread) ||
                         (winner === away.name && (finalAwayScore - finalHomeScore) > -vegaSpread);
 
-  // --- NARRATIVE GENERATOR (ENHANCED) ---
-  const margin = Math.abs(finalHomeScore - finalAwayScore);
-  const totalScore = finalHomeScore + finalAwayScore;
-  const isUpset = (vegaSpread > 0 && winner === away.name) || (vegaSpread < 0 && winner === home.name); // Rough upset check
-
-  // Helper for deterministic random selection from arrays
-  const pick = (options: string[]) => options[Math.floor((rng * 100) % options.length)];
-
-  // 1. Dynamic Intro
-  const standardIntros = [
-      `The atmosphere at ${game.venue} is electric for this Week ${game.week} showdown.`,
-      `It's a grudge match in the making as the ${away.name} roll into town to face the ${home.name}.`,
-      `History suggests a battle, but the analytics are telling a specific story for this matchup.`
-  ];
-  const closeIntros = [
-      `Get your popcorn ready. The Medi models are deadlocked, predicting a wire-to-wire thriller.`,
-      `This one is going to come down to the final possession. A true coin-flip game at ${game.venue}.`,
-      `Razor-thin margins separate these two squads. One mistake will decide it.`
-  ];
-  const blowoutIntros = [
-      `The metrics are screaming "Mismatch." This could get ugly early if the ${winner} execute.`,
-      `Total dominance is on the cards. The ${winner} simply outclass their opponent in every key metric.`,
-      `Don't blink, or you might miss the ${winner} running away with this one.`
-  ];
-
-  let selectedIntro = pick(standardIntros);
-  if (margin <= 4) selectedIntro = pick(closeIntros);
-  if (margin > 14) selectedIntro = pick(blowoutIntros);
-
-  // 2. Real News Integration (The "Intel")
-  let intelSection = "";
-  if (realNewsSnippets.length > 0) {
-      // Clean snippet: Remove "NEWS (ABBR):" prefix and any leading dash
-      const cleanNews = (snippet: string) => snippet.replace(/NEWS \([A-Z]+\): /, "").replace(/^—\s*/, "").trim();
+  // --- NARRATIVE GENERATOR (SMART) ---
+  const constructNarrative = () => {
+      // 1. Analyze the Matchup (Stats)
+      const homeOffAdv = home.offRating - away.defRating; // >0 means Home Offense > Away Defense
+      const awayOffAdv = away.offRating - home.defRating; // >0 means Away Offense > Home Defense
       
-      const mainStory = cleanNews(realNewsSnippets[0]);
-      intelSection = `\n\n**The X-Factor:** ${mainStory} This development has forced a significant adjustment in our projection engine.`;
-      
-      if (realNewsSnippets.length > 1) {
-          const secondStory = cleanNews(realNewsSnippets[1]);
-          // Use truncated version if too long
-          const briefSecond = secondStory.length > 80 ? secondStory.substring(0, 80) + "..." : secondStory;
-          intelSection += ` Additionally, reports indicate ${briefSecond} which complicates the gameplan.`;
+      let matchupStory = "";
+      if (homeOffAdv > 15) matchupStory = `The ${home.name} offense (Rated ${home.offRating}) is poised to shred a ${away.name} defense (Rated ${away.defRating}) that simply can't keep pace.`;
+      else if (awayOffAdv > 15) matchupStory = `Expect fireworks from the ${away.name}, whose ${away.offRating}-rated attack creates a massive mismatch against ${home.name}.`;
+      else if (Math.abs(homeOffAdv - awayOffAdv) < 5) matchupStory = `On paper, this is a dead heat. Both squads match up evenly in the trenches, with neither holding a distinct schematic advantage.`;
+      else matchupStory = `The analytics point to a tactical battle, with the ${winner} holding a slight leverage advantage in the red zone.`;
+
+      // 2. Weave in the News (The "Why")
+      let newsStory = "";
+      if (realNewsSnippets.length > 0) {
+          // Clean snippet
+          const cleanNews = (snippet: string) => snippet.replace(/NEWS \([A-Z]+\): /, "").replace(/^—\s*/, "").trim();
+          const mainStory = cleanNews(realNewsSnippets[0]);
+          
+          if (newsModHome < 0 || newsModAway < 0) {
+              newsStory = `However, the projection engine has flashed a warning sign regarding: "${mainStory}". This negative development has significantly dampened the forecast.`;
+          } else if (newsModHome > 0 || newsModAway > 0) {
+              newsStory = `Momentum is shifting. With reports confirming "${mainStory}", our models have upgraded the ${winner}'s ceiling.`;
+          } else {
+              newsStory = `Context matters: "${mainStory}". This narrative layer adds texture to the raw data, suggesting more volatility than the spread implies.`;
+          }
+      } else {
+          // Fallback based on injuries
+          if (home.keyInjuries?.length) newsStory = `The injury report is the X-factor here, specifically the status of ${home.keyInjuries[0]}, which looms large over game prep.`;
+          else newsStory = `With both locker rooms relatively quiet, this game will come down to pure execution and coaching adjustments.`;
       }
-  } else {
-      // Fallback to simulated chatter if no real news
-      intelSection = `\n\n**Locker Room Intel:** ${homeNews[0]} Meanwhile, the ${away.abbreviation} camp is buzzing about: "${awayNews[0]}"`;
-  }
 
-  // 3. The Verdict with Personality
-  let bettingContext = "";
-  if (game.bettingData) {
-    const coverText = (winner === home.name && (finalHomeScore - finalAwayScore) > vegaSpread) ? "covering the spread" : "beating the number";
-    bettingContext = `Vegas likes the line at ${game.bettingData.spread}, but the Medi Jinx data sees the ${winner} ${coverText}.`;
-  }
+      // 3. The Prediction Logic
+      const margin = Math.abs(finalHomeScore - finalAwayScore);
+      const spreadContext = game.bettingData ? `against the ${game.bettingData.spread} line` : "outright";
+      const logic = `Combining the ${home.offRating} vs ${away.defRating} matchup disparity with the latest intel, the algorithm sees the ${winner} ${spreadContext} by a ${margin} point margin.`;
 
-  const verdict = `\n\n**The Bottom Line:** ${bettingContext} ${isUpset ? "Smell that? It smells like an UPSET." : "Trust the talent gap."} We're locking in the ${winner} to take it ${finalHomeScore}-${finalAwayScore}.`;
+      return `${matchupStory}\n\n${newsStory}\n\n**Analysis:** ${logic}`;
+  };
 
-  const narrative = `${selectedIntro}${intelSection}${verdict}`;
+  const narrative = constructNarrative();
 
   const injuryNews = forceRefresh 
     ? "LATEST: " + (home.keyInjuries?.[0] || "No major changes") + " - situations fluid."
