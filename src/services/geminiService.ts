@@ -141,9 +141,9 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     
     const getRelevantNews = (team: typeof home) => {
         return allNews.filter(n => {
-            const headline = n.headline.toLowerCase();
-            const description = n.description.toLowerCase();
-            const text = (headline + " " + description).toLowerCase();
+            const headline = (n.headline || "").toLowerCase();
+            const description = (n.description || "").toLowerCase();
+            const text = (headline + " " + description);
             
             // ELIMINATE GENERIC/ROUNDUP CONTENT
             const isRoundup = text.includes("takeaways") || 
@@ -169,7 +169,7 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     const calculateNewsImpact = (articles: NewsArticle[]) => {
         let impact = 0;
         articles.forEach(a => {
-            const text = (a.headline + " " + a.description).toLowerCase();
+            const text = ((a.headline || "") + " " + (a.description || "")).toLowerCase();
             // Negative Keywords
             if (text.includes("out ") || text.includes("injury") || text.includes("concussion") || text.includes("ir ")) impact -= 3;
             if (text.includes("doubtful") || text.includes("questionable") || text.includes("benched")) impact -= 2;
@@ -182,8 +182,8 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     newsModHome = calculateNewsImpact(homeReal);
     newsModAway = calculateNewsImpact(awayReal);
 
-    if (homeReal.length) realNewsSnippets.push(`NEWS (${home.abbreviation}): ${homeReal[0].description}`);
-    if (awayReal.length) realNewsSnippets.push(`NEWS (${away.abbreviation}): ${awayReal[0].description}`);
+    if (homeReal.length) realNewsSnippets.push(`NEWS (${home.abbreviation}): ${homeReal[0].description || homeReal[0].headline}`);
+    if (awayReal.length) realNewsSnippets.push(`NEWS (${away.abbreviation}): ${awayReal[0].description || awayReal[0].headline}`);
 
   } catch (e) {
     console.warn("News integration skipped:", e);
@@ -252,7 +252,7 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
       if (isTrap) return `High-risk TRAP detected. The public is blindly backing a narrow favorite, but our metrics suggest a high probability of an outright upset in this ${game.homeTeam.abbreviation} matchup.`;
       if (isPublicFade) return `Contrarian play confirmed. The 'Sharp Money' is moving against the consensus, aligning with our ${winner} projection.`;
       if (home.tier > 3 || away.tier > 3) return `Volatility warning: Low-tier efficiency on the field makes the ${game.awayTeam.abbreviation} @ ${game.homeTeam.abbreviation} game prone to unexpected swings.`;
-      if (newsModHome < 0 || newsModAway < 0) return `Roster instability alert. Recent developments have injected significant variance into the expected execution for ${newsModHome < 0 ? home.abbreviation : away.abbreviation}.`;
+      if (newsModHome < 0 || newsModAway < 0) return `Roster instability alert. Recent developments have injected significant variance into the expected execution for ${newsModHome < 0 ? (home.abbreviation || "Home") : (away.abbreviation || "Away")}.`;
       return `Standard market alignment. The risk profile is balanced, with the outcome likely dictated by pure red-zone execution.`;
   };
 
