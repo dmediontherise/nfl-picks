@@ -14,6 +14,66 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   let home = { ...getTeamData(game.homeTeam) };
   let away = { ...getTeamData(game.awayTeam) };
 
+  // --- 0. DYNAMIC RATINGS ENGINE (Smart Adjustments) ---
+  const calculateDynamicRatings = (team: typeof home, newsSnippets: string[]) => {
+      // A. Baseline Tier from Live Record (e.g. "10-4-0")
+      let wins = 0;
+      if (team.record) {
+          const parts = team.record.split(/[- ]/); // Handle "10-4" or "10-4-0"
+          wins = parseInt(parts[0]) || 0;
+      }
+      
+      let dynamicTier = 3; // Default Average
+      if (wins >= 10) dynamicTier = 1;
+      else if (wins >= 8) dynamicTier = 2;
+      else if (wins >= 6) dynamicTier = 3;
+      else if (wins >= 4) dynamicTier = 4;
+      else dynamicTier = 5;
+
+      // B. Baseline Ratings based on Tier
+      // Tier 1: 90-95, Tier 2: 85-90, Tier 3: 80-85, Tier 4: 75-80, Tier 5: <75
+      let baseRating = 95 - ((dynamicTier - 1) * 5); 
+
+      // C. Injury/News Impact (The "Live" Factor)
+      let penalty = 0;
+      const combinedNews = [...(team.keyInjuries || []), ...newsSnippets].join(" ").toLowerCase();
+      
+      // QB Checks
+      const isQBOut = combinedNews.includes("qb") && (combinedNews.includes("out") || combinedNews.includes("ir") || combinedNews.includes("bench"));
+      const isStarOut = combinedNews.includes("out") || combinedNews.includes("ir");
+      
+      if (isQBOut) {
+          penalty += 15; // Massive penalty for backup QB
+          dynamicTier += 2; // Drop 2 tiers (e.g. Tier 1 -> Tier 3)
+      } else if (isStarOut) {
+          penalty += 5;
+      }
+
+      // D. Recent Form (Mock Logic: streaks would go here)
+      // For now, simple record-based is fine.
+
+      return {
+          tier: Math.min(5, dynamicTier), // Cap at 5
+          offRating: Math.max(50, baseRating - penalty),
+          defRating: Math.max(50, baseRating - (penalty / 2)) // Defense less affected by QB injury usually
+      };
+  };
+  
+  // Helper to fetch snippets for specific team
+  const getSnippets = (teamName: string) => realNewsSnippets.filter(s => s.includes(teamName));
+
+  const homeDynamic = calculateDynamicRatings(home, getSnippets(home.name));
+  const awayDynamic = calculateDynamicRatings(away, getSnippets(away.name));
+
+  // Override static data for calculations
+  home.tier = homeDynamic.tier;
+  home.offRating = homeDynamic.offRating;
+  home.defRating = homeDynamic.defRating;
+  
+  away.tier = awayDynamic.tier;
+  away.offRating = awayDynamic.offRating;
+  away.defRating = awayDynamic.defRating;
+
   // --- 1. PARSE VEGAS DATA (The Anchor) ---
   let vegaSpread = 0;
   let vegasTotal = 44; // Default NFL total if missing
