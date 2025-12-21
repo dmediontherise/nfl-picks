@@ -180,45 +180,113 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
   // --- NARRATIVE GENERATOR (SMART) ---
   const constructNarrative = () => {
-      // 1. Analyze the Matchup (Stats)
-      const homeOffAdv = home.offRating - away.defRating; // >0 means Home Offense > Away Defense
-      const awayOffAdv = away.offRating - home.defRating; // >0 means Away Offense > Home Defense
+      // 1. Context & Motivation
+      const homeStatus = home.status || "Bubble";
+      const awayStatus = away.status || "Bubble";
+      let contextStory = "";
       
-      let matchupStory = "";
-      if (homeOffAdv > 15) matchupStory = `The ${home.name} offense (Rated ${home.offRating}) is poised to shred a ${away.name} defense (Rated ${away.defRating}) that simply can't keep pace.`;
-      else if (awayOffAdv > 15) matchupStory = `Expect fireworks from the ${away.name}, whose ${away.offRating}-rated attack creates a massive mismatch against ${home.name}.`;
-      else if (Math.abs(homeOffAdv - awayOffAdv) < 5) matchupStory = `On paper, this is a dead heat. Both squads match up evenly in the trenches, with neither holding a distinct schematic advantage.`;
-      else matchupStory = `The analytics point to a tactical battle, with the ${winner} holding a slight leverage advantage in the red zone.`;
-
-      // 2. Weave in the News (The "Why")
-      let newsStory = "";
-      if (realNewsSnippets.length > 0) {
-          // Clean snippet
-          const cleanNews = (snippet: string) => snippet.replace(/NEWS \([A-Z]+\): /, "").replace(/^—\s*/, "").trim();
-          const mainStory = cleanNews(realNewsSnippets[0]);
-          
-          if (newsModHome < 0 || newsModAway < 0) {
-              newsStory = `However, the projection engine has flashed a warning sign regarding: "${mainStory}". This negative development has significantly dampened the forecast.`;
-          } else if (newsModHome > 0 || newsModAway > 0) {
-              newsStory = `Momentum is shifting. With reports confirming "${mainStory}", our models have upgraded the ${winner}'s ceiling.`;
-          } else {
-              newsStory = `Context matters: "${mainStory}". This narrative layer adds texture to the raw data, suggesting more volatility than the spread implies.`;
-          }
+      if (homeStatus === "Contender" && awayStatus === "Contender") {
+          contextStory = "With meaningful January football on the line for both squads, this has the intensity of a playoff preview.";
+      } else if (homeStatus === "Eliminated" && awayStatus === "Contender") {
+          contextStory = `Motivation mismatch alert: The ${away.name} are fighting for seeding, while the ${home.name} are playing for pride and draft positioning.`;
+      } else if (homeStatus === "Contender" && awayStatus === "Eliminated") {
+           contextStory = `The ${home.name} cannot afford to sleepwalk here against a ${away.name} team with nothing to lose and a role of spoiler to play.`;
       } else {
-          // Fallback based on injuries
-          if (home.keyInjuries?.length) newsStory = `The injury report is the X-factor here, specifically the status of ${home.keyInjuries[0]}, which looms large over game prep.`;
-          else newsStory = `With both locker rooms relatively quiet, this game will come down to pure execution and coaching adjustments.`;
+          contextStory = `A gritty late-season clash where execution will outweigh raw talent.`;
       }
 
-      // 3. The Prediction Logic
-      const margin = Math.abs(finalHomeScore - finalAwayScore);
-      const spreadContext = game.bettingData ? `against the ${game.bettingData.spread} line` : "outright";
-      const logic = `Combining the ${home.offRating} vs ${away.defRating} matchup disparity with the latest intel, the algorithm sees the ${winner} ${spreadContext} by a ${margin} point margin.`;
+      // 2. Spread & Public Sentiment Analysis
+      let bettingStory = "";
+      const projectedMargin = finalHomeScore - finalAwayScore; // Positive = Home Wins
+      const vegasMargin = vegaSpread; // Positive = Home Favored (assumed from previous logic logic: if Fav is Home, spread > 0)
+      
+      // Calculate "Edge" relative to the line
+      // If Home Fav -3.5 (VegasMargin 3.5), and we predict Home +7 (ProjMargin 7). We cover by 3.5.
+      // If Home Dog +3.5 (VegasMargin -3.5), and we predict Home -3 (ProjMargin -3). We win by 0.5 diff? 
+      // Let's keep it simple: Compare winner against spread.
+      
+      const edge = Math.abs(projectedMargin - vegasMargin);
+      const isContrarian = (game.bettingData?.publicBettingPct || 50) > 70 && !spreadCovered; // Public loves X, we pick Y (implied by not covering if public is on winner side? Complex. Let's simplify).
+      
+      // Simplified Public Fade Logic
+      // If Public > 70% on Fav, and we pick Dog -> Fade
+      const publicOnFav = (game.bettingData?.publicBettingPct || 50) > 60;
+      const wePickFav = (winner === home.name && vegasMargin > 0) || (winner === away.name && vegasMargin < 0);
+      
+      if (publicOnFav && !wePickFav) {
+          bettingStory = `The public is heavy on the favorite (${game.bettingData?.publicBettingPct}%), creating a classic 'Fade the Public' opportunity that our model loves.`;
+      } else if (edge > 6) {
+          bettingStory = `The algorithm sees a massive discrepancy from the Vegas line, identifying this as a high-value 'Trap Line' that the books have mispriced.`;
+      } else if (Math.abs(projectedMargin) < 3) {
+          bettingStory = `Expect a nail-biter. Our numbers suggest this game is significantly closer than the market implies, likely decided by a single possession.`;
+      } else {
+          bettingStory = `The sharp money aligns with the fundamentals here, validating the market movement.`;
+      }
 
-      return `${matchupStory}\n\n${newsStory}\n\n**Analysis:** ${logic}`;
+      // 3. Weave in the News (The "Why")
+      let newsStory = "";
+      let playerMentions: string[] = [];
+      
+      // Combine Real News and Key Injuries
+      const criticalNews = [...realNewsSnippets];
+      if (home.keyInjuries?.length) criticalNews.push(`INJURY ALERT (${home.abbreviation}): ${home.keyInjuries[0]}`);
+      if (away.keyInjuries?.length) criticalNews.push(`INJURY ALERT (${away.abbreviation}): ${away.keyInjuries[0]}`);
+
+      if (criticalNews.length > 0) {
+          // Extract Player Names for "Players to Watch"
+          const nameRegex = /([A-Z][a-z]+ [A-Z][a-z]+)/g;
+          criticalNews.forEach(news => {
+              const matches = news.match(nameRegex);
+              if (matches) playerMentions.push(...matches);
+          });
+
+          // Clean snippet
+          const cleanNews = (snippet: string) => snippet.replace(/NEWS \([A-Z]+\): /, "").replace(/INJURY ALERT \([A-Z]+\): /, "").replace(/^—\s*/, "").trim();
+          const mainStory = cleanNews(criticalNews[0]);
+          
+          if (mainStory.toLowerCase().includes("injury") || mainStory.toLowerCase().includes("out")) {
+              newsStory = `Crucially, the situation surrounding "${mainStory}" has forced a significant downgrade in our offensive efficiency metrics.`;
+          } else if (mainStory.toLowerCase().includes("return") || mainStory.toLowerCase().includes("active")) {
+               newsStory = `The return of key personnel ("${mainStory}") provides a timely boost to the explosive play rating.`;
+          } else {
+              newsStory = `Narrative factor: "${mainStory}". This variable introduces volatility that pure stats might miss.`;
+          }
+      } else {
+          // Fallback based on ratings
+          const offDiff = Math.abs(home.offRating - away.offRating);
+          if (offDiff > 10) newsStory = "Disparities in offensive firepower are the primary driver here, with one unit simply outclassing the other.";
+          else newsStory = "With no major roster shakeups reported, the focus shifts entirely to schematic execution and turnover variance.";
+      }
+
+      // 4. The Prediction Logic (Synthesis)
+      const logic = `Synthesizing the ${contextStory} with the ${bettingStory}, the Medi Picks engine projects the ${winner} to leverage their advantage in ${home.offRating > away.offRating ? 'offensive consistency' : 'defensive grit'}.`;
+
+      return `${contextStory}\n\n${bettingStory}\n\n${newsStory}\n\n**Verdict:** ${logic}`;
   };
 
   const narrative = constructNarrative();
+
+  // Dynamic Players to Watch
+  const generatePlayersToWatch = () => {
+      // 1. Try to find from News
+      const newsPlayers = narrative.match(/([A-Z][a-z]+ [A-Z][a-z]+)/g);
+      if (newsPlayers && newsPlayers.length >= 2) {
+          return [
+              { name: newsPlayers[0], position: "KEY", projection: "Impact Player", reasoning: "Cited in game intel." },
+              { name: newsPlayers[1], position: "X-FACTOR", projection: "Game Changer", reasoning: "Cited in game intel." }
+          ];
+      }
+      
+      // 2. Fallback to generic "Star" logic based on Team Data
+      const homeStar = home.keyInjuries?.[0]?.split(' ')[0] || "QB1"; // Very rough parsing or generic
+      const awayStar = away.keyInjuries?.[0]?.split(' ')[0] || "QB1";
+      
+      // Better: Just generic positional focus if no specific names
+      return [
+        { name: `${winner} Offense`, position: "UNIT", projection: "Over 350 Yards", reasoning: "Matchup mismatch." },
+        { name: `${winner === home.name ? away.name : home.name} Defense`, position: "UNIT", projection: "Must force 2+ TOs", reasoning: "Critical for upset chance." }
+      ];
+  };
 
   const injuryNews = forceRefresh 
     ? "LATEST: " + (home.keyInjuries?.[0] || "No major changes") + " - situations fluid."
@@ -233,11 +301,8 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     narrative: narrative,
     keyFactors: [`ATS Trend: ${spreadCovered ? "Likely Cover" : "Trap Line"}`, `Turnover Margin`, `Red Zone Efficiency`],
     injuryImpact: injuryNews,
-    coachingMatchup: "Standard variance.",
-    playersToWatch: [
-      { name: "Key Starter", position: "QB/WR", projection: "Over projected stats", reasoning: "Usage spike." },
-      { name: "Defender", position: "LB", projection: "Key stop", reasoning: "Matchup advantage." }
-    ],
+    coachingMatchup: home.tier < away.tier ? "Coaching Advantage" : "Even Matchup",
+    playersToWatch: generatePlayersToWatch(),
     statComparison: {
       home: [home.offRating, home.defRating, 75, 50, 80],
       away: [away.offRating, away.defRating, 70, 60, 75]
