@@ -54,6 +54,36 @@ export const espnApi = {
             const away = comp.competitors.find((c: any) => c.homeAway === 'away');
             const odds = comp.odds ? comp.odds[0] : null;
 
+            // DYNAMIC MARKET SIMULATOR (Updates every 60s)
+            const generatePublicMoney = (gameId: string, spreadStr: string) => {
+                // 1. Calculate Base Sentiment from Spread
+                // Public favors the Favorite (negative spread)
+                let base = 50;
+                if (spreadStr) {
+                    const parts = spreadStr.split(' ');
+                    const val = parseFloat(parts[parts.length - 1]);
+                    if (!isNaN(val)) {
+                        // If Favorite is -10, public usually bets it (e.g. 50 + 10 = 60%)
+                        // If Favorite is -3, public is split (50 + 3 = 53%)
+                        base = 50 + Math.abs(val);
+                    }
+                }
+
+                // 2. Deterministic Minute-by-Minute Fluctuation
+                const minute = Math.floor(Date.now() / 60000);
+                const seed = `${gameId}-${minute}`;
+                let hash = 0;
+                for (let i = 0; i < seed.length; i++) {
+                    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+                    hash |= 0;
+                }
+                const fluctuation = (Math.abs(Math.sin(hash)) * 10) - 5; // +/- 5% change every min
+                
+                return Math.max(10, Math.min(90, Math.round(base + fluctuation)));
+            };
+
+            const publicPct = odds ? generatePublicMoney(event.id, odds.details) : 50;
+
             return {
                 id: event.id,
                 week: event.week.number,
@@ -82,7 +112,7 @@ export const espnApi = {
                 bettingData: odds ? {
                     spread: odds.details, // e.g. "BUF -10.5"
                     total: odds.overUnder,
-                    publicBettingPct: 50 // Not provided by this API
+                    publicBettingPct: publicPct
                 } : undefined
             };
         });
