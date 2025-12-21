@@ -71,6 +71,27 @@ export const espnApi = {
                 };
             };
 
+            // DYNAMIC MARKET SIMULATOR (Updates every 60s)
+            const generatePublicMoney = (gameId: string, spreadStr: string) => {
+                let base = 50;
+                if (spreadStr) {
+                    const parts = spreadStr.split(' ');
+                    const val = parseFloat(parts[parts.length - 1]);
+                    if (!isNaN(val)) base = 50 + Math.abs(val);
+                }
+                const minute = Math.floor(Date.now() / 60000);
+                const seed = `${gameId}-${minute}`;
+                let hash = 0;
+                for (let i = 0; i < seed.length; i++) {
+                    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+                    hash |= 0;
+                }
+                const fluctuation = (Math.abs(Math.sin(hash)) * 10) - 5;
+                return Math.max(10, Math.min(90, Math.round(base + fluctuation)));
+            };
+
+            const publicPct = odds ? generatePublicMoney(event.id, odds.details) : 50;
+
             return {
                 id: event.id,
                 week: event.week.number,
@@ -99,7 +120,7 @@ export const espnApi = {
                     qbStats: extractQBStats(away)
                 },
                 bettingData: odds ? {
-                    spread: odds.details, // e.g. "BUF -10.5"
+                    spread: odds.details,
                     total: odds.overUnder,
                     publicBettingPct: publicPct
                 } : undefined
@@ -118,7 +139,6 @@ export const espnApi = {
         };
     } catch (error) {
         console.error("Failed to fetch live schedule", error);
-        // Fallback or re-throw? Let's fallback to empty for now to avoid breaking the app if offline
         return { meta: { season: 2025, week: 16, status: "ERROR", timestamp: "", source: "ERROR" }, data: [] };
     }
   },
@@ -134,15 +154,9 @@ export const espnApi = {
     if (!team) return ["No recent news available."];
 
     const headlines = [];
-    
-    // DYNAMIC 2025 NEWS FEED
-    
-    // Roster Specifics
     if (team.abbreviation === "PIT") headlines.push("Rodgers: 'This defense gives me a real shot at one more ring.'");
     if (team.abbreviation === "IND") headlines.push("Rivers on return: 'The arm feels 25 again.'");
     if (team.abbreviation === "KC") headlines.push("Reid on Mahomes injury: 'We have to find a way to move forward.'");
-    
-    // Status Specifics
     if (team.status === 'Eliminated') {
       headlines.push(`Report: ${team.name} scouting department focused heavily on 2026 QB Class.`);
       headlines.push(`Coaching Hot Seat: ${team.name} staff evaluation begins.`);
@@ -153,16 +167,11 @@ export const espnApi = {
     } else {
       headlines.push(`Week 16 Preview: ${team.name} looking to solidify positioning.`);
     }
-
-    // Injuries
     if (team.keyInjuries && team.keyInjuries.length > 0) {
       headlines.push(`Injury Alert: ${team.keyInjuries[0]} status critical for Sunday.`);
     }
-
-    // Record Context
     if (team.record === "12-2") headlines.push("Power Rankings: Consensus #1 Team in the NFL.");
     if (team.record === "2-12") headlines.push("Draft Order: Currently holding the #1 overall pick.");
-
     return headlines;
   }
 };
