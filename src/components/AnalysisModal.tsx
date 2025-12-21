@@ -113,7 +113,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                   <BrainCircuit className="w-5 h-5 text-white" />
                 </div>
                 <h1 className="text-lg md:text-xl font-bold text-white tracking-tight">
-                  Medi Jinx <span className="text-blue-400 hidden sm:inline">NFL Predictions</span>
+                  Medi Picks <span className="text-blue-400 hidden sm:inline">NFL Predictions</span>
                 </h1>
                 {analysis?.quickTake && (
                     <span className="ml-2 px-3 py-1 bg-slate-800 border border-slate-700 rounded-full text-xs font-bold text-yellow-400 uppercase tracking-widest animate-pulse">
@@ -163,7 +163,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
             {analysis ? (
               <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-700 shadow-inner text-center">
                 <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4 flex items-center justify-center gap-2">
-                  <Activity className="w-4 h-4" /> Medi Jinx Projection
+                  <Activity className="w-4 h-4" /> Medi Picks Projection
                 </h3>
                 <div className="flex items-center justify-center gap-6 mb-6">
                   <div>
@@ -281,7 +281,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-transparent pointer-events-none"></div>
                   <div className="relative z-10 max-w-[70%]">
                     <h4 className="text-orange-400 font-bold flex items-center gap-2 uppercase text-xs tracking-widest mb-1">
-                      <AlertTriangle className="w-4 h-4" /> Jinx Probability
+                      <AlertTriangle className="w-4 h-4" /> Risk Factor
                     </h4>
                     <p className="text-slate-300 text-sm leading-snug">{analysis.jinxAnalysis}</p>
                   </div>
@@ -298,7 +298,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full pointer-events-none"></div>
                   <div className="flex items-center gap-2 mb-4 relative z-10">
                     <BrainCircuit className="w-5 h-5 text-blue-400" />
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">The Medi Jinx Intel</h3>
+                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">The Medi Picks Intel</h3>
                   </div>
                   <div className="text-slate-300 leading-relaxed text-sm md:text-base space-y-4 whitespace-pre-wrap relative z-10">
                     {analysis.narrative}

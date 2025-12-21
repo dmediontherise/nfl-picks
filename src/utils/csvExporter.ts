@@ -50,7 +50,7 @@ export const downloadPredictionsAsCSV = (schedule: Game[], predictions: Record<s
   if (link.download !== undefined) {
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", "Medi_Jinx_Predictions_Week_16.csv");
+    link.setAttribute("download", "Medi_Picks_Predictions_Week_16.csv");
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
