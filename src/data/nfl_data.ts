@@ -18,7 +18,7 @@ export const TEAMS: Record<string, Team & { tier: number, offRating: number, def
   // AFC SOUTH
   JAX: { id: "JAX", name: "Jacksonville Jaguars", abbreviation: "JAX", logoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/jax.png", color: "#006778", tier: 2, offRating: 86, defRating: 80, record: "10-4-0", standing: "1st AFC South", status: "Contender", starterQB: "Trevor Lawrence", keyInjuries: [] },
   HOU: { id: "HOU", name: "Houston Texans", abbreviation: "HOU", logoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/hou.png", color: "#03202F", tier: 1, offRating: 91, defRating: 82, record: "9-5-0", standing: "2nd AFC South", status: "Contender", starterQB: "C.J. Stroud", keyInjuries: [] },
-  IND: { id: "IND", name: "Indianapolis Colts", abbreviation: "IND", logoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/ind.png", color: "#002C5F", tier: 3, offRating: 80, defRating: 78, record: "8-6-0", standing: "3rd AFC South", status: "Bubble", starterQB: "Anthony Richardson", keyInjuries: [] },
+  IND: { id: "IND", name: "Indianapolis Colts", abbreviation: "IND", logoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/ind.png", color: "#002C5F", tier: 3, offRating: 80, defRating: 78, record: "8-6-0", standing: "3rd AFC South", status: "Bubble", starterQB: "Philip Rivers", keyInjuries: ["A. Richardson (Injured - Out)"] },
   TEN: { id: "TEN", name: "Tennessee Titans", abbreviation: "TEN", logoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/ten.png", color: "#4B92DB", tier: 4, offRating: 74, defRating: 76, record: "2-12-0", standing: "4th AFC South", status: "Eliminated", starterQB: "Cam Ward", keyInjuries: [] },
 
   // AFC NORTH
