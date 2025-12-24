@@ -36,7 +36,7 @@ export const TEAMS: Record<string, Team & { tier: number, offRating: number, def
 
   // NFC NORTH
   CHI: { id: "CHI", name: "Chicago Bears", abbreviation: "CHI", logoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/chi.png", color: "#0B162A", tier: 2, offRating: 86, defRating: 90, record: "10-4-0", standing: "1st NFC North", status: "Contender", starterQB: "Caleb Williams", keyInjuries: [] },
-  GB:  { id: "GB",  name: "Green Bay Packers", abbreviation: "GB", logoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/gb.png", color: "#203731", tier: 2, offRating: 89, defRating: 82, record: "9-4-1", standing: "2nd NFC North", status: "Contender", starterQB: "Malik Willis", keyInjuries: ["J. Love (Concussion)"] },
+  GB:  { id: "GB",  name: "Green Bay Packers", abbreviation: "GB", logoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/gb.png", color: "#203731", tier: 2, offRating: 89, defRating: 82, record: "9-4-1", standing: "2nd NFC North", status: "Contender", starterQB: "Malik Willis", keyInjuries: ["J. Love (Concussion - Doubtful)"] },
   DET: { id: "DET", name: "Detroit Lions", abbreviation: "DET", logoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/det.png", color: "#0076B6", tier: 1, offRating: 93, defRating: 84, record: "8-6-0", standing: "3rd NFC North", status: "Bubble", starterQB: "Jared Goff", keyInjuries: [] },
   MIN: { id: "MIN", name: "Minnesota Vikings", abbreviation: "MIN", logoUrl: "https://a.espncdn.com/i/teamlogos/nfl/500/min.png", color: "#4F2683", tier: 3, offRating: 85, defRating: 78, record: "6-8-0", standing: "4th NFC North", status: "Bubble", starterQB: "Max Brosmer", keyInjuries: ["J.J. McCarthy (Out)"] },
 

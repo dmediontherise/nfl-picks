@@ -24,7 +24,7 @@ const MediPicksApp: React.FC = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [meta, setMeta] = useState<any>(null);
-  const [currentWeek, setCurrentWeek] = useState<number | null>(null);
+  const [currentWeek, setCurrentWeek] = useState<number | null>(17); // Default to Week 17
 
   // Load User Data on Auth Change
   useEffect(() => {
