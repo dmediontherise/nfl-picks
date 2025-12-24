@@ -9,6 +9,7 @@ export interface Team {
   status?: 'Clinched' | 'Contender' | 'Bubble' | 'Eliminated';
   keyInjuries?: string[];
   score?: number; // Live score
+  starterQB?: string; // Manual override for current week starter
   qbStats?: {
     passingYds: number;
     passingTds: number;
