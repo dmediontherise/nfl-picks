@@ -4,7 +4,15 @@ import { generateTeamNews } from './newsFactory';
 import { espnApi, NewsArticle } from './espnAdapter';
 
 const getTeamData = (team: Team) => {
-  return TEAMS[team.abbreviation] || { ...team, tier: 3, offRating: 75, defRating: 75, record: "0-0", standing: "N/A", status: "Bubble", keyInjuries: [] };
+  const staticData = TEAMS[team.abbreviation] || { tier: 3, offRating: 75, defRating: 75, status: "Bubble", keyInjuries: [] };
+  // Merge: Static data (Ratings/Tiers) <-- Live Data (Record/Score/Stats)
+  return { 
+      ...staticData, 
+      ...team,
+      // Ensure specific fields that might be missing in live data but present in static are preserved if needed,
+      // but generally 'team' (live) should win for mutable props.
+      // However, we want to keep static ratings if live doesn't have them (which it doesn't).
+  };
 };
 
 export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false): Promise<AnalysisResult> => {

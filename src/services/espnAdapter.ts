@@ -43,9 +43,13 @@ export const espnApi = {
     }
   },
 
-  getSchedule: async (): Promise<EspnResponse<Game[]>> => {
+  getSchedule: async (week?: number): Promise<EspnResponse<Game[]>> => {
     try {
-        const response = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard");
+        const url = week 
+            ? `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}`
+            : "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
+        
+        const response = await fetch(url);
         const data = await response.json();
         
         const games: Game[] = data.events.map((event: any) => {

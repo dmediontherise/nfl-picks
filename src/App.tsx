@@ -24,13 +24,14 @@ const App: React.FC = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<any>(null);
+  const [currentWeek, setCurrentWeek] = useState<number | null>(null);
 
   // Initial Fetch & Auto-Refresh (Realtime)
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 60000); // 60s Refresh
+    fetchData(currentWeek || undefined);
+    const interval = setInterval(() => fetchData(currentWeek || undefined), 60000); // 60s Refresh
     return () => clearInterval(interval);
-  }, []);
+  }, [currentWeek]);
 
   // Save Predictions
   useEffect(() => {
@@ -73,13 +74,17 @@ const App: React.FC = () => {
     });
   }, [games]);
 
-  const fetchData = async () => {
+  const fetchData = async (week?: number) => {
     // Silent update if we already have data
     if (games.length === 0) setLoading(true);
     try {
-      const response = await espnApi.getSchedule();
+      const response = await espnApi.getSchedule(week);
       setGames(response.data);
       setMeta(response.meta);
+      // Initialize current week on first load if not set
+      if (!currentWeek && response.meta?.week) {
+          setCurrentWeek(response.meta.week);
+      }
     } catch (error) {
       console.error("Failed to fetch ESPN data", error);
     } finally {
@@ -106,54 +111,73 @@ const App: React.FC = () => {
       
       {/* App Header */}
       <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-10 shadow-xl">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-0">
-          <div>
-            <h1 className="text-2xl font-black tracking-tighter text-white flex items-center gap-2">
-              MEDI PICKS <span className="text-blue-500">2025</span>
-              <span className="text-[10px] bg-red-600/20 text-red-400 px-2 py-0.5 rounded border border-red-600/30 font-mono tracking-widest animate-pulse">
-                 LIVE
-              </span>
-            </h1>
-            <p className="text-xs text-slate-400 font-medium tracking-wide uppercase flex items-center gap-2 mt-1">
-              Week {meta?.week || "..."} • Season {meta?.season || 2025}
-              <span className="text-slate-600">|</span>
-              <Server className="w-3 h-3 text-slate-500" />
-              <span className="text-slate-500">ESPN Realtime</span>
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-3">
-             <div className="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-bold text-slate-300 hidden md:block">
-              {Object.keys(userPredictions).length} Predictions Saved
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col items-center gap-4">
+          <div className="w-full flex flex-col md:flex-row items-center justify-between gap-4 md:gap-0">
+            <div>
+              <h1 className="text-2xl font-black tracking-tighter text-white flex items-center gap-2">
+                MEDI PICKS <span className="text-blue-500">2025</span>
+                <span className="text-[10px] bg-red-600/20 text-red-400 px-2 py-0.5 rounded border border-red-600/30 font-mono tracking-widest animate-pulse">
+                  LIVE
+                </span>
+              </h1>
+              <p className="text-xs text-slate-400 font-medium tracking-wide uppercase flex items-center gap-2 mt-1">
+                Week {meta?.week || "..."} • Season {meta?.season || 2025}
+                <span className="text-slate-600">|</span>
+                <Server className="w-3 h-3 text-slate-500" />
+                <span className="text-slate-500">ESPN Realtime</span>
+              </p>
             </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-bold text-slate-300 hidden md:block">
+                {Object.keys(userPredictions).length} Predictions Saved
+              </div>
 
-            <button 
-               onClick={() => setShowStandings(true)}
-               className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-yellow-400 rounded-lg transition-colors text-xs font-bold border border-slate-700"
-               title="View Standings"
-             >
-               <Trophy className="w-4 h-4" />
-               <span className="hidden sm:inline">Standings</span>
-             </button>
-             
-             <button 
-               onClick={handleDownload}
-               className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-xs font-bold shadow-lg shadow-blue-900/20 active:scale-95"
-               title="Download Predictions CSV"
-             >
-               <Download className="w-4 h-4" />
-               <span className="hidden sm:inline">Export</span>
-             </button>
+              <button 
+                onClick={() => setShowStandings(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-yellow-400 rounded-lg transition-colors text-xs font-bold border border-slate-700"
+                title="View Standings"
+              >
+                <Trophy className="w-4 h-4" />
+                <span className="hidden sm:inline">Standings</span>
+              </button>
+              
+              <button 
+                onClick={handleDownload}
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors text-xs font-bold shadow-lg shadow-blue-900/20 active:scale-95"
+                title="Download Predictions CSV"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Export</span>
+              </button>
 
-             <div className="w-px h-6 bg-slate-700 mx-1"></div>
+              <div className="w-px h-6 bg-slate-700 mx-1"></div>
 
-             <button 
-               onClick={fetchData}
-               className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors border border-slate-700 text-slate-400 hover:text-white"
-               title="Refresh Live Data"
-             >
-               <RefreshCw className={`w-4 h-4 ${loading && games.length === 0 ? 'animate-spin' : ''}`} />
-             </button>
+              <button 
+                onClick={() => fetchData(currentWeek || undefined)}
+                className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors border border-slate-700 text-slate-400 hover:text-white"
+                title="Refresh Live Data"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading && games.length === 0 ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Week Selector Tabs */}
+          <div className="w-full flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+            {[14, 15, 16, 17, 18].map((w) => (
+              <button
+                key={w}
+                onClick={() => setCurrentWeek(w)}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                  currentWeek === w 
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' 
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                }`}
+              >
+                Week {w}
+              </button>
+            ))}
           </div>
         </div>
       </header>
