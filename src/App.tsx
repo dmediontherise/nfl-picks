@@ -3,28 +3,38 @@ import AnalysisModal from './components/AnalysisModal';
 import { StandingsModal } from './StandingsModal';
 import { UserPrediction, Game } from './types';
 import { espnApi } from './services/espnAdapter';
+import { userService } from './services/userService';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthStatus } from './components/AuthStatus';
 import { downloadPredictionsAsCSV } from './utils/csvExporter';
 import { Calendar, MapPin, ChevronRight, RefreshCw, Server, Loader2, Download, Trophy } from 'lucide-react';
 
-const App: React.FC = () => {
+const MediPicksApp: React.FC = () => {
+  const { user, loading: authLoading } = useAuth();
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [showStandings, setShowStandings] = useState(false);
   
-  // Persistent State
-  const [userPredictions, setUserPredictions] = useState<Record<string, UserPrediction>>(() => {
-    const saved = localStorage.getItem('mediPicks_predictions');
-    return saved ? JSON.parse(saved) : {};
-  });
-
+  // Data State
+  const [userPredictions, setUserPredictions] = useState<Record<string, UserPrediction>>({});
   const [gameResults, setGameResults] = useState<Record<string, any>>(() => {
     const saved = localStorage.getItem('mediPicks_results');
     return saved ? JSON.parse(saved) : {};
   });
 
   const [games, setGames] = useState<Game[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [meta, setMeta] = useState<any>(null);
   const [currentWeek, setCurrentWeek] = useState<number | null>(null);
+
+  // Load User Data on Auth Change
+  useEffect(() => {
+    const loadData = async () => {
+      if (authLoading) return;
+      const preds = await userService.loadPredictions(user?.uid);
+      setUserPredictions(preds);
+    };
+    loadData();
+  }, [user, authLoading]);
 
   // Initial Fetch & Auto-Refresh (Realtime)
   useEffect(() => {
@@ -33,12 +43,13 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [currentWeek]);
 
-  // Save Predictions
-  useEffect(() => {
-    localStorage.setItem('mediPicks_predictions', JSON.stringify(userPredictions));
-  }, [userPredictions]);
+  // Save Predictions (Triggered by state change is risky with async cloud sync, 
+  // strictly handling it in handleSavePrediction is safer to avoid loops/race conditions, 
+  // but keeping it simple for now).
+  // actually, let's NOT use useEffect for saving to cloud to avoid "save on load" issues.
+  // We will save explicitly in handleSavePrediction.
 
-  // Save & Update Results
+  // Save & Update Results (Local Only for now as it is app-wide data)
   useEffect(() => {
     localStorage.setItem('mediPicks_results', JSON.stringify(gameResults));
   }, [gameResults]);
@@ -53,9 +64,6 @@ const App: React.FC = () => {
         
         games.forEach(g => {
             if (g.status === 'post' && g.homeTeam.score !== undefined && g.awayTeam.score !== undefined) {
-                // If result not saved or score changed (unlikely for final but possible for corrections)
-                // We use game.id as key. 
-                // Note: ID must be unique week-over-week. ESPN IDs usually are.
                 if (!next[g.id]) {
                     next[g.id] = {
                         homeScore: g.homeTeam.score,
@@ -75,28 +83,28 @@ const App: React.FC = () => {
   }, [games]);
 
   const fetchData = async (week?: number) => {
-    // Silent update if we already have data
-    if (games.length === 0) setLoading(true);
+    if (games.length === 0) setDataLoading(true);
     try {
       const response = await espnApi.getSchedule(week);
       setGames(response.data);
       setMeta(response.meta);
-      // Initialize current week on first load if not set
       if (!currentWeek && response.meta?.week) {
           setCurrentWeek(response.meta.week);
       }
     } catch (error) {
       console.error("Failed to fetch ESPN data", error);
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
   };
 
-  const handleSavePrediction = (prediction: UserPrediction) => {
-    setUserPredictions(prev => ({
-      ...prev,
+  const handleSavePrediction = async (prediction: UserPrediction) => {
+    const newPredictions = {
+      ...userPredictions,
       [prediction.gameId]: prediction
-    }));
+    };
+    setUserPredictions(newPredictions);
+    await userService.savePredictions(user?.uid, newPredictions);
     setSelectedGame(null);
   };
 
@@ -105,6 +113,8 @@ const App: React.FC = () => {
       downloadPredictionsAsCSV(games, userPredictions);
     }
   };
+
+  if (authLoading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-blue-500 w-8 h-8"/></div>;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-blue-500/30">
@@ -133,6 +143,10 @@ const App: React.FC = () => {
                 {Object.keys(userPredictions).length} Predictions Saved
               </div>
 
+              <AuthStatus />
+
+              <div className="w-px h-6 bg-slate-700 mx-1"></div>
+
               <button 
                 onClick={() => setShowStandings(true)}
                 className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-yellow-400 rounded-lg transition-colors text-xs font-bold border border-slate-700"
@@ -158,7 +172,7 @@ const App: React.FC = () => {
                 className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors border border-slate-700 text-slate-400 hover:text-white"
                 title="Refresh Live Data"
               >
-                <RefreshCw className={`w-4 h-4 ${loading && games.length === 0 ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${dataLoading && games.length === 0 ? 'animate-spin' : ''}`} />
               </button>
             </div>
           </div>
@@ -185,7 +199,7 @@ const App: React.FC = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
         
-        {loading && games.length === 0 ? (
+        {dataLoading && games.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64">
             <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
             <p className="text-slate-400 animate-pulse text-sm uppercase tracking-widest">Connecting to Satellite...</p>
@@ -366,6 +380,14 @@ const App: React.FC = () => {
         </p>
       </footer>
     </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <MediPicksApp />
+    </AuthProvider>
   );
 };
 
