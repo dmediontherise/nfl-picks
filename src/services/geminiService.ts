@@ -380,6 +380,59 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
     const qbLeverage = calculateQBLeverage();
 
+    // --- 6. RETROSPECTIVE GENERATOR (POST-GAME) ---
+    let retrospective = undefined;
+    if (game.status === 'post' && game.homeTeam.score !== undefined && game.awayTeam.score !== undefined) {
+        const homeScore = game.homeTeam.score;
+        const awayScore = game.awayTeam.score;
+        const actualWinner = homeScore > awayScore ? game.homeTeam.name : game.awayTeam.name;
+        const margin = Math.abs(homeScore - awayScore);
+        
+        // Find relevant post-game news
+        const postGameNews = realNewsSnippets.filter(s => 
+            s.toLowerCase().includes("win") || 
+            s.toLowerCase().includes("loss") || 
+            s.toLowerCase().includes("defeat") ||
+            s.toLowerCase().includes("victory") ||
+            s.toLowerCase().includes("score")
+        );
+        
+        // Synthesize "Key to Victory" from news or stats
+        let keyToVictory = `The ${actualWinner} executed better in the critical moments.`;
+        if (postGameNews.length > 0) {
+             // Try to find a sentence that explains the result
+             const recap = postGameNews.find(s => s.length > 50) || postGameNews[0];
+             keyToVictory = recap.replace(/^NEWS \([A-Z]+\): /, "").replace(/^INSIDER \([A-Z]+\): /, "");
+        } else if (margin < 7) {
+            keyToVictory = `Clutch performance in a one-score game. The ${actualWinner} made the decisive plays late to secure a narrow victory.`;
+        } else if (margin > 14) {
+            keyToVictory = `Complete dominance. The ${actualWinner} controlled the line of scrimmage and capitalized on turnovers to pull away early.`;
+        }
+
+        // Identify Standout Performers from News or Stats
+        const standouts = [];
+        const newsText = postGameNews.join(" ");
+        const playerMatches = newsText.match(/([A-Z][a-z]+ [A-Z][a-z]+)/g);
+        
+        if (playerMatches && playerMatches.length > 0) {
+            // Remove duplicates and limit to 3
+            Array.from(new Set(playerMatches)).slice(0, 3).forEach(p => standouts.push(p));
+        }
+        
+        if (standouts.length === 0) {
+            // Fallback to QB if available
+            if (actualWinner === game.homeTeam.name && game.homeTeam.qbStats?.name) standouts.push(`${game.homeTeam.qbStats.name} (QB)`);
+            else if (actualWinner === game.awayTeam.name && game.awayTeam.qbStats?.name) standouts.push(`${game.awayTeam.qbStats.name} (QB)`);
+            else standouts.push(`${actualWinner} Defense`);
+        }
+
+        retrospective = {
+            result: `${actualWinner} won ${Math.max(homeScore, awayScore)}-${Math.min(homeScore, awayScore)}`,
+            keyToVictory: keyToVictory,
+            standoutPerformers: standouts
+        };
+    }
+
     return {
       winnerPrediction: winner,
       homeScorePrediction: finalHomeScore,
@@ -409,6 +462,8 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
           offense: Math.min(95, Math.max(5, 50 + (home.offRating - away.offRating) * 1.5)),
           defense: Math.min(95, Math.max(5, 50 + (home.defRating - away.defRating) * 1.5)),
           qb: Math.round(qbLeverage)
-      }
+      },
+
+      retrospective: retrospective
     };
 };

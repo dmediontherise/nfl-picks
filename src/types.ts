@@ -80,6 +80,13 @@ export interface AnalysisResult {
     qb: number;      // Home % (0-100)
   };
 
+  // Post-Game Retrospective
+  retrospective?: {
+    result: string;
+    keyToVictory: string;
+    standoutPerformers: string[];
+  };
+
   // Original fields
   statComparison: any;
   injuryImpact: string;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trophy, AlertTriangle, Activity, User, ExternalLink, Loader2, BrainCircuit, Cloud, Wind, Flame, Zap, RefreshCw, TrendingUp, DollarSign } from 'lucide-react';
+import { X, Trophy, AlertTriangle, Activity, User, ExternalLink, Loader2, BrainCircuit, Cloud, Wind, Flame, Zap, RefreshCw, TrendingUp, DollarSign, History } from 'lucide-react';
 import { Game, AnalysisResult, UserPrediction, Team } from '../types';
 import { analyzeMatchup } from '../services/geminiService';
 
@@ -281,6 +281,48 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                   </div>
                 </div>
 
+          {/* Medi Retrospective (Post-Game Only) */}
+          {analysis.retrospective && (
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl p-6 border border-slate-700/50 shadow-xl mb-6 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <History className="w-16 h-16 text-white" />
+                </div>
+                
+                <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <History className="w-4 h-4" />
+                    Medi Retrospective
+                </h3>
+                
+                <div className="space-y-4 relative z-10">
+                    <div>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-1">Final Result</div>
+                        <div className="text-lg font-bold text-white">{analysis.retrospective.result}</div>
+                    </div>
+                    
+                    <div>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-1">Key to Victory</div>
+                        <p className="text-sm text-slate-300 leading-relaxed italic">
+                            "{analysis.retrospective.keyToVictory}"
+                        </p>
+                    </div>
+
+                    {analysis.retrospective.standoutPerformers.length > 0 && (
+                        <div>
+                             <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mb-2">Standout Performers</div>
+                             <div className="flex flex-wrap gap-2">
+                                {analysis.retrospective.standoutPerformers.map((player, idx) => (
+                                    <span key={idx} className="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-xs text-blue-300 font-bold">
+                                        {player}
+                                    </span>
+                                ))}
+                             </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+          )}
+
+          {/* Narrative Analysis */}
                 {/* Narrative Card */}
                  <div className="bg-slate-800/50 p-6 rounded-xl border-l-4 border-blue-500 relative overflow-hidden">
                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-full pointer-events-none"></div>
