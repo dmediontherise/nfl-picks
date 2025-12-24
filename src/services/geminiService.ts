@@ -164,7 +164,72 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   away.offRating = awayDynamic.offRating;
   away.defRating = awayDynamic.defRating;
 
-  // --- 1. PARSE VEGAS DATA (The Anchor) ---
+  // --- 1. ELO RATING SYSTEM (NFELO Methodology) ---
+  // Base Elo Conversion: Map 0-100 rating to ~1100-1900 Elo
+  // 50 -> 1500 (Average), 95 -> 1770 (Elite), 20 -> 1320 (Poor)
+  const toElo = (rating: number) => 1200 + (rating * 6);
+  
+  // Calculate Base Team Elo (Weighted: 60% Offense, 40% Defense for simplicity, typically it's more complex)
+  let homeElo = (toElo(home.offRating) * 0.6) + (toElo(home.defRating) * 0.4);
+  let awayElo = (toElo(away.offRating) * 0.6) + (toElo(away.defRating) * 0.4);
+
+  // --- 2. QB ADJUSTMENTS (Value Over Replacement) ---
+  // Calculate a "QB Elo Value" based on the efficiency metrics calculated in dynamic ratings
+  // We assume the base rating includes an "average" QB. 
+  // We adjust up/down based on the specific QB performance relative to league average.
+  const calculateQBValue = (team: typeof home) => {
+      if (!team.qbStats) return 0;
+      const { passingTds, interceptions, passingYds } = team.qbStats;
+      // Simple Efficiency: (TDs * 5 + Yds/20 - Ints * 4) normalized
+      // Avg Week 16: 20 TDs, 3000 yds, 10 INTs => 100 + 150 - 40 = 210
+      const score = (passingTds * 5) + (passingYds / 20) - (interceptions * 4);
+      const avgScore = 210;
+      // Scale: +/- 100 Elo points max for QB difference
+      return Math.max(-120, Math.min(120, (score - avgScore) * 1.5));
+  };
+
+  const homeQBAdj = calculateQBValue(home);
+  const awayQBAdj = calculateQBValue(away);
+  
+  homeElo += homeQBAdj;
+  awayElo += awayQBAdj;
+
+  // --- 3. NEWS & INJURY ADJUSTMENTS (Elo Impact) ---
+  // NewsMod is currently +/- 10 points on the spread scale? No, it was arbitrary.
+  // Let's convert NewsMod to Elo. 1 Spread Point ~= 25 Elo.
+  // Existing NewsMod range was -10 to +10. Let's say that's -50 to +50 Elo.
+  homeElo += (newsModHome * 5);
+  awayElo += (newsModAway * 5);
+
+  // Apply specific injury penalties to Elo
+  const applyEloInjuryPenalty = (team: typeof home) => {
+    let penalty = 0;
+    const combinedNews = [...(team.keyInjuries || []), ...realNewsSnippets.filter(s => s.includes(team.name))].join(" ").toLowerCase();
+    
+    // Major Key Injuries (Non-QB, as QB is handled above via stats usually, but if backup is playing, stats might be old?)
+    // Note: The 'calculateDynamicRatings' already adjusted the base rating for 'QB Out'.
+    // We will just add a small extra penalty for general cluster injuries.
+    if (combinedNews.match(/out|ir|doubtful/g)?.length || 0 > 2) penalty += 30; // ~1 point
+    return penalty;
+  };
+
+  homeElo -= applyEloInjuryPenalty(home);
+  awayElo -= applyEloInjuryPenalty(away);
+
+  // --- 4. HOME FIELD ADVANTAGE ---
+  // Standard NFELO HFA is ~48-55 points.
+  const HFA = 55;
+  homeElo += HFA;
+
+  // --- 5. WIN PROBABILITY & SPREAD ---
+  // Standard Elo Formula: E_A = 1 / (1 + 10^((R_B - R_A) / 400))
+  const eloDiff = homeElo - awayElo;
+  const homeWinProb = 1 / (1 + Math.pow(10, (-eloDiff / 400)));
+  
+  // Derived Spread: ~25 Elo points = 1 point spread
+  let projectedSpread = eloDiff / 25; 
+
+  // --- 6. PARSE VEGAS DATA (The Anchor) ---
   let vegaSpread = 0;
   let vegasTotal = 44;
 
@@ -179,29 +244,17 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     }
   }
 
-  let impliedHome = (vegasTotal + vegaSpread) / 2;
-  let impliedAway = (vegasTotal - vegaSpread) / 2;
+  // --- 7. FINAL SCORING MODEL ---
+  // We use the projected spread relative to the Vegas Total to derive scores.
+  // impliedHome + impliedAway = Total
+  // impliedHome - impliedAway = Spread
+  // 2 * impliedHome = Total + Spread
+  const predictedTotal = vegasTotal; // Trust Vegas for pace/environment
+  
+  let finalHomeScore = (predictedTotal + projectedSpread) / 2;
+  let finalAwayScore = (predictedTotal - projectedSpread) / 2;
 
-  // --- 2. APPLY RATINGS ADJUSTMENTS ---
-  const applyInjuryPenalty = (team: typeof home) => {
-    let penalty = 0;
-    team.keyInjuries?.forEach(injury => {
-      if (injury.includes("QB")) penalty += 4;
-      else penalty += 2;
-    });
-    return penalty;
-  };
-
-  const homeInjuryPen = applyInjuryPenalty(home);
-  const awayInjuryPen = applyInjuryPenalty(away);
-
-  const homeMatchupAdvantage = (home.offRating - away.defRating) / 4;
-  const awayMatchupAdvantage = (away.offRating - home.defRating) / 4;
-
-  let finalHomeScore = impliedHome + homeMatchupAdvantage - homeInjuryPen + newsModHome;
-  let finalAwayScore = impliedAway + awayMatchupAdvantage - awayInjuryPen + newsModAway;
-
-  // --- 3. APPLY VARIANCE (DETERMINISTIC) ---
+  // --- 8. APPLY VARIANCE (DETERMINISTIC) ---
   const getSeededRandom = (seed: string) => {
     let hash = 0;
     for (let i = 0; i < seed.length; i++) {
@@ -212,13 +265,13 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     return x - Math.floor(x);
   };
 
-  const rng = getSeededRandom(game.id + "_variance_v1");
+  const rng = getSeededRandom(game.id + "_variance_vElo");
   const variance = (rng * 6) - 3; 
   
   finalHomeScore += variance;
   finalAwayScore -= variance;
 
-  // --- 4. SAFETY CLAMP ---
+  // --- 9. SAFETY CLAMP ---
   const clampScore = (score: number) => {
     let s = Math.round(score);
     if (s <= 1) return 0;
@@ -230,7 +283,8 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   finalAwayScore = clampScore(finalAwayScore);
 
   if (finalHomeScore === finalAwayScore) {
-    if (home.offRating > away.offRating) finalHomeScore += 3;
+    // Break tie with Elo
+    if (homeElo > awayElo) finalHomeScore += 3;
     else finalAwayScore += 3;
   }
 
