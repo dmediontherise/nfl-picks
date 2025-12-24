@@ -17,11 +17,15 @@ export const AuthStatus: React.FC = () => {
   if (user) {
     return (
       <div className="flex items-center gap-3">
-        <div className="hidden md:flex items-center gap-2">
-            {user.photoURL && (
+        <div className="flex items-center gap-2">
+            {user.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-6 h-6 rounded-full border border-slate-600" />
+            ) : (
+                <div className="w-6 h-6 rounded-full bg-slate-700 border border-slate-600 flex items-center justify-center text-xs font-bold text-slate-300">
+                    {user.displayName ? user.displayName[0] : 'U'}
+                </div>
             )}
-            <div className="flex flex-col">
+            <div className="flex flex-col hidden md:flex">
                 <span className="text-xs font-bold text-white leading-none">{user.displayName}</span>
                 <span className="text-[9px] text-slate-500 leading-none">Cloud Sync Active</span>
             </div>

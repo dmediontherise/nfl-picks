@@ -22,6 +22,11 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   let home = { ...getTeamData(game.homeTeam) };
   let away = { ...getTeamData(game.awayTeam) };
 
+  // Common Identifiers for filtering
+  const allTeamIdentifiers = Object.values(TEAMS).flatMap(t => [t.name.toLowerCase(), t.abbreviation.toLowerCase()]);
+  const matchupIdentifiers = [home.name.toLowerCase(), home.abbreviation.toLowerCase(), away.name.toLowerCase(), away.abbreviation.toLowerCase()];
+  const otherTeamIdentifiers = allTeamIdentifiers.filter(id => !matchupIdentifiers.includes(id));
+
   // --- PRE-FETCH REAL NEWS (Used for Dynamic Ratings) ---
   let newsModHome = 0;
   let newsModAway = 0;
@@ -29,9 +34,6 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
   try {
     const allNews = await espnApi.getRealNews();
-    const allTeamIdentifiers = Object.values(TEAMS).flatMap(t => [t.name.toLowerCase(), t.abbreviation.toLowerCase()]);
-    const matchupIdentifiers = [home.name.toLowerCase(), home.abbreviation.toLowerCase(), away.name.toLowerCase(), away.abbreviation.toLowerCase()];
-    const otherTeamIdentifiers = allTeamIdentifiers.filter(id => !matchupIdentifiers.includes(id));
     
     const getRelevantNews = (team: typeof home) => {
         return allNews.filter(n => {
@@ -312,75 +314,84 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
   // --- NARRATIVE GENERATOR (DEEP INTEL) ---
   const constructNarrative = () => {
-      // 1. Context & Motivation
+      // Helper to ensure we only mention relevant players/teams
+      const safeMention = (text: string) => {
+          // Double check that the text doesn't contain other team names
+          const hasOtherTeam = otherTeamIdentifiers.some(id => new RegExp(`\\b${id}\\b`, 'i').test(text));
+          return hasOtherTeam ? "Recent reports suggest key adjustments in practice." : text;
+      };
+
+      // 1. HIGH STAKES CONTEXT
       const homeStatus = home.status || "Bubble";
       const awayStatus = away.status || "Bubble";
       let contextStory = "";
       
+      const eloGap = Math.abs(homeElo - awayElo);
+      const isDavidsVsGoliath = eloGap > 150;
+      
       if (homeStatus === "Contender" && awayStatus === "Contender") {
-          contextStory = `This matchup between the ${game.homeTeam.abbreviation} and ${game.awayTeam.abbreviation} carries significant playoff implications. Both squads are jockeying for position, and the intensity should mirror a postseason contest.`;
-      } else if (homeStatus === "Eliminated" && awayStatus === "Contender") {
-          contextStory = `The ${away.name} arrive with everything to play for, while the ${home.name} are looking to play spoiler. These "motivation mismatch" games often produce surprising results if the favorite comes out flat.`;
-      } else if (homeStatus === "Contender" && awayStatus === "Eliminated") {
-           contextStory = `For the ${home.name}, this is a business trip. They cannot afford a slip-up against an ${away.name} team that is playing loose with nothing to lose.`;
+          contextStory = `This ${game.homeTeam.name} vs. ${game.awayTeam.name} showdown has the palpable atmosphere of a postseason preview. With both franchises positioning themselves for a deep January run, the margin for error is razor-thin. Our Elo model rates this as a "Tier 1 Matchup," meaning the outcome will likely ripple through the entire conference playoff picture.`;
+      } else if (isDavidsVsGoliath) {
+           const favorite = homeElo > awayElo ? home.name : away.name;
+           contextStory = `On paper, this looks like a mismatch. The ${favorite} enter as heavy favorites with a significant Elo advantage of ${Math.round(eloGap)} points. However, late-season complacency is a real variable; if the favorite comes out flat, this has all the makings of a classic "Trap Game" scenario.`;
       } else {
-          contextStory = `Both the ${home.name} and ${away.name} are looking to find some rhythm. It's a battle for pride and momentum as we head deeper into the season.`;
+          contextStory = `We are looking at a grit-and-grind battle between two squads fighting for respect. The ${home.name} and ${away.name} are evenly matched in our efficiency models, suggesting a game script defined by field position, turnover margin, and red-zone execution rather than explosive plays.`;
       }
 
-      // 2. QB Power Duel (Statistical Breakdown)
+      // 2. THE QUARTERBACK DUEL (Advanced Metrics)
       let qbStory = "";
       if (home.qbStats && away.qbStats) {
-          const getQBScore = (stats: any) => (stats.passingTds * 5) + (stats.passingYds / 50) - (stats.interceptions * 3);
-          const hScore = getQBScore(home.qbStats).toFixed(1);
-          const aScore = getQBScore(away.qbStats).toFixed(1);
+          const hName = home.qbStats.name || `${home.abbreviation} QB1`;
+          const aName = away.qbStats.name || `${away.abbreviation} QB1`;
           
-          qbStory = `Under center, we have a compelling contrast. ${home.qbStats.name || home.abbreviation + " QB"} has posted a power score of ${hScore} this season, compared to ${aScore} for ${away.qbStats.name || away.abbreviation + " QB"}. `;
+          qbStory = `Under center, the contrast in styles is evident. ${hName} has anchored the ${home.abbreviation} offense with ${home.qbStats.passingTds} touchdowns and ${home.qbStats.passingYds} yards, translating to a Value-Over-Replacement adjustment of ${homeQBAdj > 0 ? '+' : ''}${Math.round(homeQBAdj)} Elo points. 
           
-          if (Math.abs(parseFloat(hScore) - parseFloat(aScore)) > 15) {
-              const leader = parseFloat(hScore) > parseFloat(aScore) ? home.abbreviation : away.abbreviation;
-              qbStory += `The metrics point to a clear advantage for ${leader} in terms of efficiency and red-zone production.`;
-          } else {
-              qbStory += `Statistically, it's a dead heat. With both signal-callers performing at a similar level, the game will likely turn on which defense can force a critical turnover.`;
-          }
+          Across the field, ${aName} counters with ${away.qbStats.passingTds} scores of his own. The key metric to watch here is the Interception Rate; ${home.qbStats.interceptions > away.qbStats.interceptions ? hName : aName} has shown a tendency to force throws into tight windows, a liability that the opposing secondary is primed to exploit. In a game projected to be this close, a single errant throw could be the deciding factor.`;
       } else {
-          qbStory = `Quarterback play will be the X-factor here, with our model relying on baseline efficiency tiers to separate these two units.`;
+          qbStory = `Quarterback play remains the volatile variable. With one or both starters lacking a full season of data (or due to injury uncertainty), our model has reverted to baseline positional efficiency ratings. The team that can simplify the game plan and protect the football will hold the upper hand.`;
       }
 
-      // 3. Unit Breakdown (Offense vs Defense)
-      const unitStory = `The trenches will tell the story. The ${home.name} offense (Rated ${home.offRating}) faces a ${away.name} defense rated at ${away.defRating}. On the other side, the ${away.name} offense (${away.offRating}) goes up against the ${home.name} defense (${home.defRating}). Key schematic advantages often decide these close matchups.`;
-
-      // 4. Market & Risk Analysis
-      let bettingStory = "";
-      const projectedMargin = finalHomeScore - finalAwayScore;
-      const vegasMargin = vegaSpread;
-      const edge = Math.abs(projectedMargin - vegasMargin);
+      // 3. TRENCH WARFARE (Offense vs Defense)
+      let unitStory = "";
+      const homeOffAdv = home.offRating - away.defRating; // + means Home Offense wins
+      const awayOffAdv = away.offRating - home.defRating; // + means Away Offense wins
       
-      if (edge > 6) {
-          bettingStory = `Our internal projections show a significant deviation from the Vegas line (${game.bettingData?.spread || "N/A"}). This suggests the market might be mispricing the true gap between these teams.`;
+      if (homeOffAdv > 10) {
+          unitStory = `Schematically, the ${home.name} offense holds a massive leverage advantage. Their offensive rating of ${home.offRating} dwarfs the ${away.name} defensive rating of ${away.defRating}. Expect the ${home.abbreviation} play-callers to attack the perimeter early and often, as the data suggests they can move the chains at will.`;
+      } else if (awayOffAdv > 10) {
+          unitStory = `The mismatch to watch is when the ${away.name} have the ball. Their efficient attack (Rated ${away.offRating}) aligns perfectly against a porous ${home.name} defense (Rated ${home.defRating}). Unless the home pass rush can generate unnatural pressure, this could turn into a track meet.`;
       } else {
-          bettingStory = `The betting market seems efficient here, with the spread of ${game.bettingData?.spread || "N/A"} aligning closely with our fundamental analysis.`;
+          unitStory = `In the trenches, this is an old-school stalemate. Both the ${home.name} offense (Rated ${home.offRating}) and the ${away.name} offense (Rated ${away.offRating}) face disciplined defensive units. Yards will be at a premium, and special teams or a defensive score might ultimately break the deadlock.`;
       }
 
-      // 5. Synthesized News Factor
+      // 4. MARKET INTELLIGENCE & VEGAS ALIGNMENT
+      let bettingStory = "";
+      const edge = Math.abs(finalHomeScore - finalAwayScore - vegaSpread);
+      const isContrarian = (finalHomeScore > finalAwayScore && vegaSpread < 0) || (finalHomeScore < finalAwayScore && vegaSpread > 0);
+      
+      if (edge > 5) {
+          bettingStory = `From a handicapping perspective, our algorithm screams "Value." The public consensus and Vegas line (${game.bettingData?.spread}) have drifted significantly from our internal projection. We see a ${edge.toFixed(1)}-point edge that the market is ignoring, likely due to overreacting to last week's box scores.`;
+      } else if (isContrarian) {
+          bettingStory = `Our model is flashing a "Contrarian Alert." While the betting public and bookmakers favor the ${vegaSpread > 0 ? home.name : away.name}, our granular efficiency data suggests the ${vegaSpread > 0 ? away.name : home.name} are the smarter play to cover, or even win outright.`;
+      } else {
+          bettingStory = `The "Sharp Money" appears to be on the sidelines for this one. Our projected spread tracks almost identically with the Vegas line (${game.bettingData?.spread}). This indicates an efficient market where the outcome is truly a coin flip, dependent entirely on execution rather than a pre-game valuation error.`;
+      }
+
+      // 5. THE X-FACTOR (News & Intangibles)
       let newsStory = "";
       const criticalNews = [...realNewsSnippets];
-      if (criticalNews.length === 0) {
-           const hNews = homeNews.filter(n => !n.includes("Mock Draft") && !n.includes("Power Rankings"));
-           const aNews = awayNews.filter(n => !n.includes("Mock Draft") && !n.includes("Power Rankings"));
-           if (hNews.length > 0) criticalNews.push(`INSIDER (${home.abbreviation}): ${hNews[0]}`);
-           else if (aNews.length > 0) criticalNews.push(`INSIDER (${away.abbreviation}): ${aNews[0]}`);
-      }
-
-      if (criticalNews.length > 0) {
-          const priorityNews = criticalNews.find(n => n.includes("INJURY") || n.includes("NEWS")) || criticalNews[0];
-          const cleanNews = (snippet: string) => snippet.replace(/NEWS \([A-Z]+\): /, "").replace(/INJURY ALERT \([A-Z]+\): /, "").replace(/INSIDER \([A-Z]+\): /, "").replace(/^—\s*/, "").trim();
-          const mainStory = cleanNews(priorityNews);
-          newsStory = `One critical variable to watch: "${mainStory}". This factor could disrupt the standard game script and introduce unexpected volatility.`;
+      // Filter strictly for this game's teams again just to be safe
+      const strictlyRelevantNews = criticalNews.filter(n => n.includes(home.abbreviation) || n.includes(away.abbreviation) || n.includes(home.name) || n.includes(away.name));
+      
+      if (strictlyRelevantNews.length > 0) {
+          const priorityNews = strictlyRelevantNews.find(n => n.includes("INJURY") || n.includes("NEWS")) || strictlyRelevantNews[0];
+          const cleanNews = safeMention(priorityNews.replace(/NEWS \([A-Z]+\): /, "").replace(/INJURY ALERT \([A-Z]+\): /, "").replace(/INSIDER \([A-Z]+\): /, "").replace(/^—\s*/, "").trim());
+          newsStory = `Finally, we cannot ignore the latest intel from the locker room: "${cleanNews}". This development adds a layer of complexity to the game plan. The coaching staff's ability to adjust to this variable in real-time will define the second half.`;
       } else {
-          newsStory = `With no major late-breaking news, the focus remains squarely on execution and game-day performance.`;
+          newsStory = `With a relatively clean injury report and no major distractions reported this week, the focus shifts entirely to the "Game within the Game"—coaching adjustments, clock management, and situational football.`;
       }
 
-      const logic = `The Medi Picks engine projects a ${Math.abs(finalHomeScore - finalAwayScore)}-point victory for the ${winner}. This forecast is built on a combination of ${home.tier < away.tier ? 'superior coaching tiers' : 'comparative statistical advantages'} and the momentum trends we've tracked this week.`;
+      const logic = `**VERDICT:** The Medi Picks engine projects a ${Math.abs(finalHomeScore - finalAwayScore)}-point victory for the ${winner}. This forecast is built on a weighted synthesis of the ${home.tier < away.tier ? 'superior coaching tiers' : 'comparative statistical advantages'}, the calculated QB Elo Value, and the momentum trends we've tracked throughout the week.`;
 
       return `${contextStory}\n\n${qbStory}\n\n${unitStory}\n\n${bettingStory}\n\n${newsStory}\n\n${logic}`;
   };

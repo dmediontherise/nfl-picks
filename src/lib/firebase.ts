@@ -2,14 +2,15 @@ import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// NOTE: Replace these values with your own from the Firebase Console
+// Keys provided by user. Hardcoding to ensure build picks them up correctly.
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSy_DEMO_KEY_PLACEHOLDER",
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "medi-picks-demo.firebaseapp.com",
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "medi-picks-demo",
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "medi-picks-demo.appspot.com",
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "123456789",
-  appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:123456789:web:abcdef"
+  apiKey: "AIzaSyDQmNHSsGtd_pbVqXTC4uYva56qYEJWye8",
+  authDomain: "medi-nfl-picks.firebaseapp.com",
+  projectId: "medi-nfl-picks",
+  storageBucket: "medi-nfl-picks.firebasestorage.app",
+  messagingSenderId: "193206998364",
+  appId: "1:193206998364:web:aa09c854be69c450d0dd99",
+  measurementId: "G-8JWNSHTJ05"
 };
 
 // Initialize Firebase
@@ -21,6 +22,5 @@ export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export const isFirebaseConfigured = () => {
-    return process.env.REACT_APP_FIREBASE_API_KEY && 
-           process.env.REACT_APP_FIREBASE_API_KEY !== "AIzaSy_DEMO_KEY_PLACEHOLDER";
+    return true; // We know it's configured now
 };
