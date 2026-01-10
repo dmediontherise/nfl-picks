@@ -19,7 +19,19 @@ const getTeamData = (team: Team) => {
   return merged;
 };
 
+// Cache for analysis results to respect the 15-minute rule
+const analysisCache: Record<string, { result: AnalysisResult, timestamp: number }> = {};
+
 export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false): Promise<AnalysisResult> => {
+  const cacheKey = game.id;
+  const now = Date.now();
+  const CACHE_DURATION = 15 * 60 * 1000; // 15 Minutes
+
+  if (!forceRefresh && analysisCache[cacheKey] && (now - analysisCache[cacheKey].timestamp < CACHE_DURATION)) {
+      console.log(`Returning cached analysis for ${game.id}`);
+      return analysisCache[cacheKey].result;
+  }
+
   console.log(`Analyzing matchup: ${game.awayTeam.name} @ ${game.homeTeam.name}`);
   await new Promise(resolve => setTimeout(resolve, 800));
 
@@ -97,17 +109,36 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
     const calculateNewsImpact = (articles: NewsArticle[]) => {
         let impact = 0;
+        let qbImpact = false;
+        
         articles.forEach(a => {
             const text = ((a.headline || "") + " " + (a.description || "")).toLowerCase();
-            if (text.includes("out ") || text.includes("injury") || text.includes("concussion") || text.includes("ir ")) impact -= 3;
-            if (text.includes("doubtful") || text.includes("questionable") || text.includes("benched")) impact -= 2;
-            if (text.includes("return") || text.includes("cleared") || text.includes("active")) impact += 2;
+            
+            // Critical Injuries
+            if (text.includes("acl") || text.includes("surgery") || text.includes("broken") || text.includes("out for season")) impact -= 5;
+            else if (text.includes("out ") || text.includes("ruled out") || text.includes("dnp") || text.includes("concussion")) impact -= 3;
+            else if (text.includes("doubtful")) impact -= 2;
+            else if (text.includes("questionable") || text.includes("game-time decision")) impact -= 1;
+            
+            // Positional Weighting
+            if (text.includes("qb ") || text.includes("quarterback")) {
+                if (text.includes("out") || text.includes("injury")) {
+                    impact -= 5; // Extra penalty for QB
+                    qbImpact = true;
+                }
+            }
+
+            // Positive News
+            if (text.includes("return") || text.includes("cleared") || text.includes("active") || text.includes("expected to play")) impact += 2;
         });
-        return Math.max(-10, Math.min(10, impact));
+        return { score: Math.max(-15, Math.min(10, impact)), qbImpact };
     };
 
-    newsModHome = calculateNewsImpact(homeReal);
-    newsModAway = calculateNewsImpact(awayReal);
+    const homeImpact = calculateNewsImpact(homeReal);
+    const awayImpact = calculateNewsImpact(awayReal);
+    
+    newsModHome = homeImpact.score;
+    newsModAway = awayImpact.score;
 
     if (homeReal.length) homeNewsSnippet = homeReal[0].description || homeReal[0].headline;
     if (awayReal.length) awayNewsSnippet = awayReal[0].description || awayReal[0].headline;
@@ -481,7 +512,7 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
         };
     }
 
-    return {
+    const result = {
       winnerPrediction: winner,
       homeScorePrediction: finalHomeScore,
       awayScorePrediction: finalAwayScore,
@@ -500,7 +531,7 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
       jinxAnalysis: jinxAnalysisText,
       jinxScore: Math.abs(finalHomeScore - finalAwayScore) < 7 ? 8 : 3,
       upsetProbability: 30,
-      weather: { temp: 42, condition: "Clear", windSpeed: 5, impactOnPassing: "Low" },
+      weather: { temp: 42, condition: "Clear", windSpeed: 5, impactOnPassing: "Low" as "Low" | "Moderate" | "High" },
       executionRating: finalExecutionRating,
       explosiveRating: finalExplosiveRating,
       quickTake: Math.abs(finalHomeScore - finalAwayScore) > 10 ? "Mismatch" : "Close Game",
@@ -514,4 +545,8 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
       retrospective: retrospective
     };
+
+    // Cache the result
+    analysisCache[game.id] = { result, timestamp: Date.now() };
+    return result;
 };
