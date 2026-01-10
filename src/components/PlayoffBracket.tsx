@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Game } from '../types';
 import { espnApi } from '../services/espnAdapter';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Shield, Trophy } from 'lucide-react';
+
+const AFC_TEAMS = ['BAL', 'BUF', 'CIN', 'CLE', 'DEN', 'HOU', 'IND', 'JAX', 'KC', 'LAC', 'LV', 'MIA', 'NE', 'NYJ', 'PIT', 'TEN'];
+
+const getConference = (teamAbbr: string) => AFC_TEAMS.includes(teamAbbr) ? 'AFC' : 'NFC';
 
 const PlayoffBracket: React.FC = () => {
-    const [rounds, setRounds] = useState<{
-        wildCard: Game[];
-        divisional: Game[];
-        conference: Game[];
-        superBowl: Game[];
+    const [bracket, setBracket] = useState<{
+        afc: { wc: Game[], div: Game[], conf: Game | null },
+        nfc: { wc: Game[], div: Game[], conf: Game | null },
+        sb: Game | null
     } | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -22,11 +25,22 @@ const PlayoffBracket: React.FC = () => {
                     espnApi.getSchedule(5, 3)  // Super Bowl
                 ]);
 
-                setRounds({
-                    wildCard: wc.data,
-                    divisional: div.data,
-                    conference: conf.data,
-                    superBowl: sb.data
+                // Helper to filter games by conference (checking home team)
+                const filterConf = (games: Game[], conf: 'AFC' | 'NFC') => 
+                    games.filter(g => getConference(g.homeTeam.abbreviation) === conf);
+
+                setBracket({
+                    afc: {
+                        wc: filterConf(wc.data, 'AFC'),
+                        div: filterConf(div.data, 'AFC'),
+                        conf: filterConf(conf.data, 'AFC')[0] || null
+                    },
+                    nfc: {
+                        wc: filterConf(wc.data, 'NFC'),
+                        div: filterConf(div.data, 'NFC'),
+                        conf: filterConf(conf.data, 'NFC')[0] || null
+                    },
+                    sb: sb.data[0] || null
                 });
             } catch (error) {
                 console.error("Failed to load bracket", error);
@@ -45,17 +59,25 @@ const PlayoffBracket: React.FC = () => {
         );
     }
 
-    if (!rounds) return null;
+    if (!bracket) return null;
 
-    const renderGame = (game: Game) => {
+    const GameCard = ({ game, placeholder }: { game?: Game | null, placeholder: string }) => {
+        if (!game) {
+            return (
+                <div className="bg-slate-900/50 border-2 border-dashed border-slate-800 rounded-lg p-4 w-64 h-24 flex items-center justify-center text-slate-600 font-bold uppercase tracking-wider text-xs">
+                    {placeholder}
+                </div>
+            );
+        }
+
         const winner = game.status === 'post' 
             ? (game.homeTeam.score || 0) > (game.awayTeam.score || 0) ? game.homeTeam.id : game.awayTeam.id 
             : null;
 
         return (
-            <div key={game.id} className="bg-slate-900 border border-slate-800 rounded-lg p-3 w-64 shadow-lg relative z-10">
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 w-64 shadow-lg relative z-10 transition-transform hover:scale-105">
                  <div className="text-[10px] text-slate-500 mb-2 uppercase tracking-wider flex justify-between">
-                    <span>{new Date(game.date).toLocaleDateString(undefined, {weekday: 'short'})}</span>
+                    <span>{new Date(game.date).toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'})}</span>
                     <span className={game.status === 'in' ? 'text-red-500 font-bold animate-pulse' : ''}>
                         {game.status === 'post' ? 'FINAL' : game.clock}
                     </span>
@@ -67,7 +89,7 @@ const PlayoffBracket: React.FC = () => {
                         <img src={game.awayTeam.logoUrl} className="w-5 h-5 object-contain" alt="" />
                         <span className="font-bold text-sm truncate w-32">{game.awayTeam.name}</span>
                     </div>
-                    <span className="font-mono font-bold">{game.awayTeam.score}</span>
+                    <span className="font-mono font-bold text-white">{game.awayTeam.score}</span>
                  </div>
 
                  {/* Home */}
@@ -76,55 +98,63 @@ const PlayoffBracket: React.FC = () => {
                         <img src={game.homeTeam.logoUrl} className="w-5 h-5 object-contain" alt="" />
                         <span className="font-bold text-sm truncate w-32">{game.homeTeam.name}</span>
                     </div>
-                    <span className="font-mono font-bold">{game.homeTeam.score}</span>
+                    <span className="font-mono font-bold text-white">{game.homeTeam.score}</span>
                  </div>
             </div>
         );
     };
 
+    const ConferenceColumn = ({ title, games, color, conf }: { title: string, games: any, color: string, conf: string }) => (
+        <div className="flex flex-col gap-8 min-w-max">
+            <h3 className={`text-center font-black text-2xl uppercase tracking-tighter mb-4 ${color} flex items-center justify-center gap-2`}>
+                <Shield className="w-6 h-6" /> {title}
+            </h3>
+            
+            <div className="flex gap-8 items-center">
+                {/* Wild Card Column */}
+                <div className="flex flex-col gap-4">
+                    <div className="text-center text-xs font-bold text-slate-500 uppercase mb-2">Wild Card</div>
+                    {games.wc.length > 0 ? games.wc.map((g: Game) => <GameCard key={g.id} game={g} placeholder="" />) : 
+                        [1,2,3].map(i => <GameCard key={i} placeholder={`${conf} Wild Card ${i}`} />)
+                    }
+                </div>
+
+                <div className="w-8 h-px bg-slate-700 hidden md:block"></div>
+
+                {/* Divisional Column */}
+                <div className="flex flex-col gap-16">
+                     <div className="text-center text-xs font-bold text-slate-500 uppercase mb-2">Divisional</div>
+                     {games.div.length > 0 ? games.div.map((g: Game) => <GameCard key={g.id} game={g} placeholder="" />) :
+                        [1,2].map(i => <GameCard key={i} placeholder={`${conf} Divisional ${i}`} />)
+                     }
+                </div>
+
+                <div className="w-8 h-px bg-slate-700 hidden md:block"></div>
+
+                {/* Conference Championship */}
+                <div className="flex flex-col justify-center h-full pt-8">
+                    <div className="text-center text-xs font-bold text-slate-500 uppercase mb-2">Championship</div>
+                    <GameCard game={games.conf} placeholder={`${conf} Championship`} />
+                </div>
+            </div>
+        </div>
+    );
+
     return (
-        <div className="overflow-x-auto pb-8">
-            <div className="flex gap-12 min-w-max px-8">
-                {/* Wild Card */}
-                <div className="flex flex-col">
-                    <h3 className="text-center text-slate-500 font-bold uppercase tracking-widest mb-6">Wild Card</h3>
-                    <div className="flex flex-col justify-around h-full gap-8">
-                        {rounds.wildCard.map(renderGame)}
-                    </div>
-                </div>
-
-                {/* Divisional */}
-                <div className="flex flex-col pt-16">
-                     <h3 className="text-center text-slate-500 font-bold uppercase tracking-widest mb-6">Divisional</h3>
-                     <div className="flex flex-col justify-around h-full gap-16">
-                        {rounds.divisional.length > 0 ? rounds.divisional.map(renderGame) : (
-                            Array(4).fill(0).map((_, i) => (
-                                <div key={i} className="w-64 h-24 border-2 border-dashed border-slate-800 rounded-lg flex items-center justify-center text-slate-600 text-sm">TBD</div>
-                            ))
-                        )}
-                     </div>
-                </div>
-
-                {/* Conference */}
-                <div className="flex flex-col pt-32">
-                    <h3 className="text-center text-slate-500 font-bold uppercase tracking-widest mb-6">Conf Champ</h3>
-                    <div className="flex flex-col justify-around h-full gap-32">
-                        {rounds.conference.length > 0 ? rounds.conference.map(renderGame) : (
-                            Array(2).fill(0).map((_, i) => (
-                                <div key={i} className="w-64 h-24 border-2 border-dashed border-slate-800 rounded-lg flex items-center justify-center text-slate-600 text-sm">TBD</div>
-                            ))
-                        )}
-                    </div>
-                </div>
+        <div className="overflow-x-auto pb-8 px-4">
+            <div className="flex flex-col gap-16">
+                {/* AFC Bracket */}
+                <ConferenceColumn title="AFC" games={bracket.afc} color="text-red-500" conf="AFC" />
+                
+                {/* NFC Bracket */}
+                <ConferenceColumn title="NFC" games={bracket.nfc} color="text-blue-500" conf="NFC" />
 
                 {/* Super Bowl */}
-                <div className="flex flex-col pt-64">
-                    <h3 className="text-center text-yellow-500 font-bold uppercase tracking-widest mb-6">Super Bowl</h3>
-                    <div className="flex flex-col justify-center h-full">
-                        {rounds.superBowl.length > 0 ? rounds.superBowl.map(renderGame) : (
-                            <div className="w-64 h-24 border-2 border-dashed border-yellow-900/50 rounded-lg flex items-center justify-center text-yellow-700 text-sm font-bold">LIX</div>
-                        )}
-                    </div>
+                <div className="border-t border-slate-800 pt-12 flex flex-col items-center">
+                    <h3 className="text-center font-black text-3xl text-yellow-500 uppercase tracking-widest mb-8 flex items-center gap-3">
+                        <Trophy className="w-8 h-8" /> Super Bowl LIX
+                    </h3>
+                    <GameCard game={bracket.sb} placeholder="Super Bowl LIX" />
                 </div>
             </div>
         </div>
