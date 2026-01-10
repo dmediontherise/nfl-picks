@@ -29,51 +29,73 @@ export const StandingsModal: React.FC<StandingsModalProps> = ({ onClose, predict
         const pred = predictions[gameId];
         if (!pred) return; // No prediction for this game
 
-        const actualWinnerName = res.homeScore > res.awayScore ? res.homeName : res.awayName; 
-        
+        const actualWinnerName = res.homeScore > res.awayScore ? res.homeName : res.awayName;
+
+        // --- Helper: Check ATS ---
+        const checkATS = (predHome: number, predAway: number) => {
+             if (!res.spread) return null;
+             const parts = res.spread.split(' ');
+             if (parts.length < 2) return null;
+             
+             // 1. Determine Line from Home Perspective
+             const favAbbr = parts[0];
+             const rawVal = parseFloat(parts[parts.length - 1]);
+             // If Home is Fav, line is negative. If Away is Fav, Home line is positive.
+             const homeLine = favAbbr === res.homeAbbr ? -Math.abs(rawVal) : Math.abs(rawVal);
+
+             // 2. Determine Actual Result (Did Home Cover?)
+             const actualMargin = res.homeScore - res.awayScore;
+             const actualDiff = actualMargin + homeLine;
+             
+             if (actualDiff === 0) return 'PUSH';
+
+             const homeCovered = actualDiff > 0;
+
+             // 3. Determine Prediction Pick (Did Pred pick Home to cover?)
+             const predMargin = predHome - predAway;
+             const predDiff = predMargin + homeLine;
+             
+             // If prediction is exactly on the line, we can't really score it as a W/L unless we default to "Winner Pick".
+             // But for now, let's say if predDiff > 0, they picked Home. 
+             // If predDiff == 0 (rare), let's fallback to the winner pick direction.
+             let pickedHomeToCover = predDiff > 0;
+             if (predDiff === 0) {
+                 pickedHomeToCover = predHome > predAway; 
+             }
+
+             if (homeCovered === pickedHomeToCover) return 'WIN';
+             return 'LOSS';
+        };
+
         // --- User ---
         if (pred.userPredictedWinner) {
             if (pred.userPredictedWinner === actualWinnerName) userRecord.w++; else userRecord.l++;
             
-            // ATS
-            if (res.spread) {
-                 const parts = res.spread.split(' ');
-                 if (parts.length >= 2) {
-                     const favAbbr = parts[0];
-                     const line = parseFloat(parts[parts.length - 1]);
-                     const margin = favAbbr === res.homeAbbr ? (res.homeScore - res.awayScore) : (res.awayScore - res.homeScore);
-                     const diff = margin + line;
-                     
-                     const pickedFav = pred.userPredictedWinner === (favAbbr === res.homeAbbr ? res.homeName : res.awayName);
-                     
-                     if (diff === 0) userRecord.atsP++;
-                     else if (diff > 0 && pickedFav) userRecord.atsW++;
-                     else if (diff < 0 && !pickedFav) userRecord.atsW++;
-                     else userRecord.atsL++;
-                 }
+            // ATS (User)
+            // Parse User Scores (default to 0 if missing, but they should be there)
+            const uHome = parseInt(pred.userHomeScore || "0");
+            const uAway = parseInt(pred.userAwayScore || "0");
+            
+            if (uHome || uAway) {
+                const result = checkATS(uHome, uAway);
+                if (result === 'WIN') userRecord.atsW++;
+                else if (result === 'LOSS') userRecord.atsL++;
+                else if (result === 'PUSH') userRecord.atsP++;
             }
         }
 
         // --- App ---
         if (pred.predictedWinner) {
             if (pred.predictedWinner === actualWinnerName) appRecord.w++; else appRecord.l++;
-             // ATS
-            if (res.spread) {
-                 const parts = res.spread.split(' ');
-                 if (parts.length >= 2) {
-                     const favAbbr = parts[0];
-                     const line = parseFloat(parts[parts.length - 1]);
-                     const margin = favAbbr === res.homeAbbr ? (res.homeScore - res.awayScore) : (res.awayScore - res.homeScore);
-                     const diff = margin + line;
-                     
-                     const pickedFav = pred.predictedWinner === (favAbbr === res.homeAbbr ? res.homeName : res.awayName);
-                     
-                     if (diff === 0) appRecord.atsP++;
-                     else if (diff > 0 && pickedFav) appRecord.atsW++;
-                     else if (diff < 0 && !pickedFav) appRecord.atsW++;
-                     else appRecord.atsL++;
-                 }
-            }
+            
+            // ATS (App)
+            const aHome = parseFloat(pred.homeScore);
+            const aAway = parseFloat(pred.awayScore);
+            
+            const result = checkATS(aHome, aAway);
+            if (result === 'WIN') appRecord.atsW++;
+            else if (result === 'LOSS') appRecord.atsL++;
+            else if (result === 'PUSH') appRecord.atsP++;
         }
     });
 
