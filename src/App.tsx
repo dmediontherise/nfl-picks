@@ -1,18 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import AnalysisModal from './components/AnalysisModal';
 import { StandingsModal } from './StandingsModal';
+import PlayoffBracket from './components/PlayoffBracket';
 import { UserPrediction, Game } from './types';
 import { espnApi } from './services/espnAdapter';
 import { userService } from './services/userService';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthStatus } from './components/AuthStatus';
 import { downloadPredictionsAsCSV } from './utils/csvExporter';
-import { Calendar, MapPin, ChevronRight, RefreshCw, Server, Loader2, Download, Trophy } from 'lucide-react';
+import { Calendar, MapPin, ChevronRight, RefreshCw, Server, Loader2, Download, Trophy, GitBranch } from 'lucide-react';
+
+const rounds = [
+    { id: 'w17', label: 'Week 17', week: 17, type: 2 },
+    { id: 'w18', label: 'Week 18', week: 18, type: 2 },
+    { id: 'wc', label: 'Wild Card', week: 1, type: 3 },
+    { id: 'div', label: 'Divisional', week: 2, type: 3 },
+    { id: 'conf', label: 'Conf Champ', week: 3, type: 3 },
+    { id: 'sb', label: 'Super Bowl', week: 5, type: 3 },
+];
 
 const MediPicksApp: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [showStandings, setShowStandings] = useState(false);
+  const [view, setView] = useState<'games' | 'bracket'>('games');
   
   // Data State
   const [userPredictions, setUserPredictions] = useState<Record<string, UserPrediction>>({});
@@ -24,7 +35,7 @@ const MediPicksApp: React.FC = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [meta, setMeta] = useState<any>(null);
-  const [currentWeek, setCurrentWeek] = useState<number | null>(17); // Default to Week 17
+  const [currentRound, setCurrentRound] = useState(rounds[2]); // Default to Wild Card
 
   // Load User Data on Auth Change
   useEffect(() => {
@@ -38,16 +49,12 @@ const MediPicksApp: React.FC = () => {
 
   // Initial Fetch & Auto-Refresh (Realtime)
   useEffect(() => {
-    fetchData(currentWeek || undefined);
-    const interval = setInterval(() => fetchData(currentWeek || undefined), 60000); // 60s Refresh
-    return () => clearInterval(interval);
-  }, [currentWeek]);
-
-  // Save Predictions (Triggered by state change is risky with async cloud sync, 
-  // strictly handling it in handleSavePrediction is safer to avoid loops/race conditions, 
-  // but keeping it simple for now).
-  // actually, let's NOT use useEffect for saving to cloud to avoid "save on load" issues.
-  // We will save explicitly in handleSavePrediction.
+    if (view === 'games') {
+        fetchData(currentRound);
+        const interval = setInterval(() => fetchData(currentRound), 60000); // 60s Refresh
+        return () => clearInterval(interval);
+    }
+  }, [currentRound, view]);
 
   // Save & Update Results (Local Only for now as it is app-wide data)
   useEffect(() => {
@@ -82,15 +89,12 @@ const MediPicksApp: React.FC = () => {
     });
   }, [games]);
 
-  const fetchData = async (week?: number) => {
+  const fetchData = async (round: typeof rounds[0]) => {
     if (games.length === 0) setDataLoading(true);
     try {
-      const response = await espnApi.getSchedule(week);
+      const response = await espnApi.getSchedule(round.week, round.type);
       setGames(response.data);
       setMeta(response.meta);
-      if (!currentWeek && response.meta?.week) {
-          setCurrentWeek(response.meta.week);
-      }
     } catch (error) {
       console.error("Failed to fetch ESPN data", error);
     } finally {
@@ -131,7 +135,7 @@ const MediPicksApp: React.FC = () => {
                 </span>
               </h1>
               <p className="text-xs text-slate-400 font-medium tracking-wide uppercase flex items-center gap-2 mt-1">
-                Week {meta?.week || "..."} • Season {meta?.season || 2025}
+                {currentRound.label} • Season {meta?.season || 2025}
                 <span className="text-slate-600">|</span>
                 <Server className="w-3 h-3 text-slate-500" />
                 <span className="text-slate-500">ESPN Realtime</span>
@@ -155,6 +159,15 @@ const MediPicksApp: React.FC = () => {
                 <Trophy className="w-4 h-4" />
                 <span className="hidden sm:inline">Standings</span>
               </button>
+
+              <button 
+                onClick={() => setView(view === 'games' ? 'bracket' : 'games')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-xs font-bold border border-slate-700 ${view === 'bracket' ? 'bg-blue-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'}`}
+                title="View Bracket"
+              >
+                <GitBranch className="w-4 h-4" />
+                <span className="hidden sm:inline">Bracket</span>
+              </button>
               
               <button 
                 onClick={handleDownload}
@@ -168,7 +181,7 @@ const MediPicksApp: React.FC = () => {
               <div className="w-px h-6 bg-slate-700 mx-1"></div>
 
               <button 
-                onClick={() => fetchData(currentWeek || undefined)}
+                onClick={() => fetchData(currentRound)}
                 className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors border border-slate-700 text-slate-400 hover:text-white"
                 title="Refresh Live Data"
               >
@@ -178,28 +191,31 @@ const MediPicksApp: React.FC = () => {
           </div>
 
           {/* Week Selector Tabs */}
-          <div className="w-full flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-            {[14, 15, 16, 17, 18].map((w) => (
-              <button
-                key={w}
-                onClick={() => setCurrentWeek(w)}
-                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
-                  currentWeek === w 
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' 
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Week {w}
-              </button>
-            ))}
-          </div>
+          {view === 'games' && (
+            <div className="w-full flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+                {rounds.map((r) => (
+                <button
+                    key={r.id}
+                    onClick={() => setCurrentRound(r)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                    currentRound.id === r.id 
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' 
+                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                    }`}
+                >
+                    {r.label}
+                </button>
+                ))}
+            </div>
+          )}
         </div>
       </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        
-        {dataLoading && games.length === 0 ? (
+        {view === 'bracket' ? (
+            <PlayoffBracket />
+        ) : dataLoading && games.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64">
             <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
             <p className="text-slate-400 animate-pulse text-sm uppercase tracking-widest">Connecting to Satellite...</p>

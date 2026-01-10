@@ -43,11 +43,16 @@ export const espnApi = {
     }
   },
 
-  getSchedule: async (week?: number): Promise<EspnResponse<Game[]>> => {
+  getSchedule: async (week?: number, seasonType: number = 2): Promise<EspnResponse<Game[]>> => {
     try {
-        const url = week 
-            ? `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}`
-            : "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
+        let url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
+        const params = new URLSearchParams();
+        if (week) params.append("week", week.toString());
+        if (seasonType) params.append("seasontype", seasonType.toString());
+        
+        if (params.toString()) {
+            url += `?${params.toString()}`;
+        }
         
         const response = await fetch(url);
         const data = await response.json();
