@@ -129,22 +129,27 @@ const PlayoffBracket: React.FC = () => {
         );
     };
 
-    const ConferenceColumn = ({ title, games, color, conf, seed1 }: { title: string, games: any, color: string, conf: string, seed1: Team }) => (
-        <div className="flex flex-col gap-8 min-w-max">
-            <h3 className={`text-center font-black text-2xl uppercase tracking-tighter mb-4 ${color} flex items-center justify-center gap-2`}>
-                <Shield className="w-6 h-6" /> {title}
+    const ConferenceColumn = ({ title, games, color, conf, seed1 }: { title: string, games: any, color: string, conf: string, seed1: Team }) => {
+        const isSeed1InGame = (g: Game) => g.homeTeam.abbreviation === seed1.abbreviation || g.awayTeam.abbreviation === seed1.abbreviation;
+        const divGame1 = games.div.find(isSeed1InGame);
+        const divGame2 = games.div.find((g: Game) => !isSeed1InGame(g));
+
+        return (
+        <div className="flex-shrink-0 flex flex-col gap-8 border p-8 rounded-2xl border-slate-800 bg-slate-900/40 backdrop-blur-sm shadow-2xl">
+            <h3 className={`text-center font-black text-3xl uppercase tracking-widest mb-6 ${color} flex items-center justify-center gap-3 border-b border-slate-800 pb-4`}>
+                <Shield className="w-8 h-8" /> {title}
             </h3>
             
-            <div className="flex gap-8 items-start">
+            <div className="flex gap-12 items-center">
                 {/* Wild Card Column */}
-                <div className="flex flex-col gap-4">
-                    <div className="text-center text-xs font-bold text-slate-500 uppercase mb-2">Wild Card</div>
+                <div className="flex flex-col gap-6">
+                    <div className="text-center text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 bg-slate-800/50 py-1 rounded">Wild Card</div>
                     {games.wc.length > 0 ? games.wc.map((g: Game) => (
-                        <div key={g.id}>
+                        <div key={g.id} className="relative group">
                             <GameCard game={g} placeholder="" />
-                            <div className="mt-1 flex items-center gap-1 text-[9px] text-slate-500 px-2">
+                            <div className="mt-2 flex items-center justify-center gap-1 text-[9px] font-bold text-slate-600 uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">
                                 <GitCommit className="w-3 h-3" />
-                                <span>Winner → Div Round (Reseeded)</span>
+                                <span>Re-seeds to lowest</span>
                             </div>
                         </div>
                     )) : 
@@ -152,78 +157,89 @@ const PlayoffBracket: React.FC = () => {
                     }
                 </div>
 
-                <div className="w-8 h-px bg-slate-700 hidden md:block mt-16"></div>
+                {/* connection visual */}
+                <div className="flex flex-col justify-around h-[400px]">
+                    <div className="w-12 h-px bg-gradient-to-r from-slate-700 to-slate-800"></div>
+                    <div className="w-12 h-px bg-gradient-to-r from-slate-700 to-slate-800"></div>
+                    <div className="w-12 h-px bg-gradient-to-r from-slate-700 to-slate-800"></div>
+                </div>
 
                 {/* Divisional Column */}
-                <div className="flex flex-col gap-16">
-                     <div className="text-center text-xs font-bold text-slate-500 uppercase mb-2">Divisional</div>
+                <div className="flex flex-col gap-24 py-12">
+                     <div className="text-center text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 bg-slate-800/50 py-1 rounded">Divisional</div>
                      
                      {/* Game 1: 1 Seed vs Lowest Seed */}
-                     {games.div.length > 0 && games.div.some((g: Game) => g.homeTeam.abbreviation === seed1.abbreviation || g.awayTeam.abbreviation === seed1.abbreviation) ? (
-                         games.div.filter((g: Game) => g.homeTeam.abbreviation === seed1.abbreviation || g.awayTeam.abbreviation === seed1.abbreviation).map((g: Game) => (
-                             <GameCard key={g.id} game={g} placeholder="" />
-                         ))
+                     {divGame1 ? (
+                         <GameCard game={divGame1} placeholder="" />
                      ) : (
-                        <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 w-64 shadow-lg relative z-10">
-                            <div className="text-[10px] text-slate-500 mb-2 uppercase tracking-wider flex justify-between">
+                        <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 w-64 shadow-xl relative z-10 transition-all hover:border-slate-500">
+                            <div className="text-[10px] text-slate-500 mb-3 uppercase tracking-wider flex justify-between border-b border-slate-800 pb-2">
                                 <span>TBD</span>
-                                <span className="text-slate-600">Waiting on WC</span>
+                                <span className="text-slate-600 font-mono">Reseeded</span>
                             </div>
-                            {/* Lowest Seed Placeholder */}
-                            <div className="flex justify-between items-center mb-1 opacity-50">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-5 h-5 rounded-full bg-slate-800"></div>
-                                    <span className="font-bold text-sm text-slate-500">Lowest WC Winner</span>
+                            <div className="flex justify-between items-center mb-3 opacity-40">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 h-6 rounded-full bg-slate-800 border border-slate-700"></div>
+                                    <span className="font-bold text-sm text-slate-500">Lowest Remaining</span>
                                 </div>
                             </div>
-                            {/* #1 Seed Home */}
                             <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    <img src={seed1.logoUrl} className="w-5 h-5 object-contain" alt="" />
-                                    <span className="font-bold text-sm truncate w-32">{seed1.name}</span>
+                                <div className="flex items-center gap-3">
+                                    <img src={seed1.logoUrl} className="w-8 h-8 object-contain drop-shadow-lg" alt="" />
+                                    <span className="font-black text-sm truncate w-32 text-white">{seed1.name}</span>
                                 </div>
-                                <span className="bg-green-900/30 text-green-400 text-[9px] px-1.5 py-0.5 rounded border border-green-900/50">#1 Seed</span>
+                                <span className="bg-green-500/10 text-green-400 text-[8px] font-black px-2 py-0.5 rounded border border-green-500/20 uppercase tracking-widest">Bye</span>
                             </div>
                         </div>
                      )}
 
                      {/* Game 2: Remaining Matchup */}
-                     {games.div.length > 0 && !games.div.some((g: Game) => g.homeTeam.abbreviation === seed1.abbreviation || g.awayTeam.abbreviation === seed1.abbreviation) ? (
-                         games.div.filter((g: Game) => g.homeTeam.abbreviation !== seed1.abbreviation && g.awayTeam.abbreviation !== seed1.abbreviation).map((g: Game) => (
-                             <GameCard key={g.id} game={g} placeholder="" />
-                         ))
+                     {divGame2 ? (
+                         <GameCard game={divGame2} placeholder="" />
                      ) : (
-                        <GameCard placeholder={`${conf} Divisional Matchup`} />
+                        <div className="relative group">
+                            <GameCard placeholder={`${conf} Divisional Matchup`} />
+                            <div className="absolute inset-0 bg-slate-900/40 rounded-lg pointer-events-none"></div>
+                        </div>
                      )}
                 </div>
 
-                <div className="w-8 h-px bg-slate-700 hidden md:block mt-16"></div>
+                <div className="flex flex-col justify-center">
+                    <div className="w-12 h-px bg-gradient-to-r from-slate-700 to-slate-800"></div>
+                </div>
 
                 {/* Conference Championship */}
-                <div className="flex flex-col justify-center h-full pt-16">
-                    <div className="text-center text-xs font-bold text-slate-500 uppercase mb-2">Championship</div>
-                    <GameCard game={games.conf} placeholder={`${conf} Championship`} />
+                <div className="flex flex-col gap-4">
+                    <div className="text-center text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 bg-slate-800/50 py-1 rounded">Conference</div>
+                    <div className="relative group">
+                        <div className="absolute -inset-1 bg-gradient-to-b from-transparent via-slate-700/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"></div>
+                        <GameCard game={games.conf} placeholder={`${conf} Championship`} />
+                    </div>
                 </div>
             </div>
         </div>
     );
+    };
 
     return (
-        <div className="overflow-x-auto pb-8 px-4">
-            <div className="flex flex-col gap-16">
+        <div className="w-full overflow-x-auto pb-12">
+            <div className="flex flex-col lg:flex-row gap-12 lg:gap-8 min-w-max px-8 justify-center items-start">
                 {/* AFC Bracket */}
                 <ConferenceColumn title="AFC" games={bracket.afc} color="text-red-500" conf="AFC" seed1={bracket.afc.seed1} />
                 
                 {/* NFC Bracket */}
                 <ConferenceColumn title="NFC" games={bracket.nfc} color="text-blue-500" conf="NFC" seed1={bracket.nfc.seed1} />
+            </div>
 
-                {/* Super Bowl */}
-                <div className="border-t border-slate-800 pt-12 flex flex-col items-center">
-                    <h3 className="text-center font-black text-3xl text-yellow-500 uppercase tracking-widest mb-8 flex items-center gap-3">
-                        <Trophy className="w-8 h-8" /> Super Bowl LIX
+            {/* Super Bowl */}
+            <div className="border-t border-slate-800 pt-16 mt-16 flex flex-col items-center">
+                <div className="relative">
+                    <div className="absolute -inset-4 bg-yellow-500/10 blur-xl rounded-full"></div>
+                    <h3 className="relative z-10 text-center font-black text-4xl text-yellow-500 uppercase tracking-[0.2em] mb-10 flex items-center gap-4">
+                        <Trophy className="w-10 h-10" /> Super Bowl LIX
                     </h3>
-                    <GameCard game={bracket.sb} placeholder="Super Bowl LIX" />
                 </div>
+                <GameCard game={bracket.sb} placeholder="Super Bowl LIX" />
             </div>
         </div>
     );
