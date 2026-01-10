@@ -1,16 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { Game } from '../types';
+import { Game, Team } from '../types';
+import { TEAMS } from '../data/nfl_data';
 import { espnApi } from '../services/espnAdapter';
-import { Loader2, Shield, Trophy } from 'lucide-react';
+import { Loader2, Shield, Trophy, GitCommit } from 'lucide-react';
 
 const AFC_TEAMS = ['BAL', 'BUF', 'CIN', 'CLE', 'DEN', 'HOU', 'IND', 'JAX', 'KC', 'LAC', 'LV', 'MIA', 'NE', 'NYJ', 'PIT', 'TEN'];
 
 const getConference = (teamAbbr: string) => AFC_TEAMS.includes(teamAbbr) ? 'AFC' : 'NFC';
 
+const getSeeds = (conf: 'AFC' | 'NFC') => {
+    const confTeams = Object.values(TEAMS).filter(t => getConference(t.abbreviation) === conf);
+    // Sort by wins (descending)
+    return confTeams.sort((a, b) => {
+        const winsA = parseInt(a.record?.split(/[- ]/)[0] || "0");
+        const winsB = parseInt(b.record?.split(/[- ]/)[0] || "0");
+        return winsB - winsA;
+    });
+};
+
 const PlayoffBracket: React.FC = () => {
     const [bracket, setBracket] = useState<{
-        afc: { wc: Game[], div: Game[], conf: Game | null },
-        nfc: { wc: Game[], div: Game[], conf: Game | null },
+        afc: { wc: Game[], div: Game[], conf: Game | null, seed1: Team },
+        nfc: { wc: Game[], div: Game[], conf: Game | null, seed1: Team },
         sb: Game | null
     } | null>(null);
     const [loading, setLoading] = useState(true);
@@ -25,7 +36,6 @@ const PlayoffBracket: React.FC = () => {
                     espnApi.getSchedule(5, 3)  // Super Bowl
                 ]);
 
-                // Helper to filter games by conference (checking home team)
                 const filterConf = (games: Game[], conf: 'AFC' | 'NFC') => 
                     games.filter(g => getConference(g.homeTeam.abbreviation) === conf);
 
@@ -33,12 +43,14 @@ const PlayoffBracket: React.FC = () => {
                     afc: {
                         wc: filterConf(wc.data, 'AFC'),
                         div: filterConf(div.data, 'AFC'),
-                        conf: filterConf(conf.data, 'AFC')[0] || null
+                        conf: filterConf(conf.data, 'AFC')[0] || null,
+                        seed1: getSeeds('AFC')[0]
                     },
                     nfc: {
                         wc: filterConf(wc.data, 'NFC'),
                         div: filterConf(div.data, 'NFC'),
-                        conf: filterConf(conf.data, 'NFC')[0] || null
+                        conf: filterConf(conf.data, 'NFC')[0] || null,
+                        seed1: getSeeds('NFC')[0]
                     },
                     sb: sb.data[0] || null
                 });
@@ -61,7 +73,20 @@ const PlayoffBracket: React.FC = () => {
 
     if (!bracket) return null;
 
-    const GameCard = ({ game, placeholder }: { game?: Game | null, placeholder: string }) => {
+    const GameCard = ({ game, placeholder, teamOverride }: { game?: Game | null, placeholder: string, teamOverride?: Team }) => {
+        if (teamOverride) {
+             return (
+                <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 w-64 shadow-lg relative z-10 flex items-center gap-3">
+                    <div className="bg-green-500/20 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded absolute top-2 right-2">BYE</div>
+                    <img src={teamOverride.logoUrl} className="w-10 h-10 object-contain" alt="" />
+                    <div>
+                        <div className="font-bold text-white text-sm">#{1} {teamOverride.name}</div>
+                        <div className="text-[10px] text-slate-500">Waiting for Lowest Seed</div>
+                    </div>
+                </div>
+             );
+        }
+
         if (!game) {
             return (
                 <div className="bg-slate-900/50 border-2 border-dashed border-slate-800 rounded-lg p-4 w-64 h-24 flex items-center justify-center text-slate-600 font-bold uppercase tracking-wider text-xs">
@@ -104,35 +129,46 @@ const PlayoffBracket: React.FC = () => {
         );
     };
 
-    const ConferenceColumn = ({ title, games, color, conf }: { title: string, games: any, color: string, conf: string }) => (
+    const ConferenceColumn = ({ title, games, color, conf, seed1 }: { title: string, games: any, color: string, conf: string, seed1: Team }) => (
         <div className="flex flex-col gap-8 min-w-max">
             <h3 className={`text-center font-black text-2xl uppercase tracking-tighter mb-4 ${color} flex items-center justify-center gap-2`}>
                 <Shield className="w-6 h-6" /> {title}
             </h3>
             
-            <div className="flex gap-8 items-center">
+            <div className="flex gap-8 items-start">
                 {/* Wild Card Column */}
                 <div className="flex flex-col gap-4">
                     <div className="text-center text-xs font-bold text-slate-500 uppercase mb-2">Wild Card</div>
-                    {games.wc.length > 0 ? games.wc.map((g: Game) => <GameCard key={g.id} game={g} placeholder="" />) : 
+                    {games.wc.length > 0 ? games.wc.map((g: Game) => (
+                        <div key={g.id}>
+                            <GameCard game={g} placeholder="" />
+                            <div className="mt-1 flex items-center gap-1 text-[9px] text-slate-500 px-2">
+                                <GitCommit className="w-3 h-3" />
+                                <span>Winner → Div Round (Reseeded)</span>
+                            </div>
+                        </div>
+                    )) : 
                         [1,2,3].map(i => <GameCard key={i} placeholder={`${conf} Wild Card ${i}`} />)
                     }
                 </div>
 
-                <div className="w-8 h-px bg-slate-700 hidden md:block"></div>
+                <div className="w-8 h-px bg-slate-700 hidden md:block mt-16"></div>
 
                 {/* Divisional Column */}
-                <div className="flex flex-col gap-16">
+                <div className="flex flex-col gap-8 mt-8">
                      <div className="text-center text-xs font-bold text-slate-500 uppercase mb-2">Divisional</div>
+                     {/* 1 Seed BYE Slot */}
+                     <GameCard placeholder="1 Seed Bye" teamOverride={seed1} />
+                     
                      {games.div.length > 0 ? games.div.map((g: Game) => <GameCard key={g.id} game={g} placeholder="" />) :
-                        [1,2].map(i => <GameCard key={i} placeholder={`${conf} Divisional ${i}`} />)
+                        [1].map(i => <GameCard key={i} placeholder={`${conf} Divisional Matchup`} />)
                      }
                 </div>
 
-                <div className="w-8 h-px bg-slate-700 hidden md:block"></div>
+                <div className="w-8 h-px bg-slate-700 hidden md:block mt-16"></div>
 
                 {/* Conference Championship */}
-                <div className="flex flex-col justify-center h-full pt-8">
+                <div className="flex flex-col justify-center h-full pt-16">
                     <div className="text-center text-xs font-bold text-slate-500 uppercase mb-2">Championship</div>
                     <GameCard game={games.conf} placeholder={`${conf} Championship`} />
                 </div>
@@ -144,10 +180,10 @@ const PlayoffBracket: React.FC = () => {
         <div className="overflow-x-auto pb-8 px-4">
             <div className="flex flex-col gap-16">
                 {/* AFC Bracket */}
-                <ConferenceColumn title="AFC" games={bracket.afc} color="text-red-500" conf="AFC" />
+                <ConferenceColumn title="AFC" games={bracket.afc} color="text-red-500" conf="AFC" seed1={bracket.afc.seed1} />
                 
                 {/* NFC Bracket */}
-                <ConferenceColumn title="NFC" games={bracket.nfc} color="text-blue-500" conf="NFC" />
+                <ConferenceColumn title="NFC" games={bracket.nfc} color="text-blue-500" conf="NFC" seed1={bracket.nfc.seed1} />
 
                 {/* Super Bowl */}
                 <div className="border-t border-slate-800 pt-12 flex flex-col items-center">
