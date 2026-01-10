@@ -155,14 +155,46 @@ const PlayoffBracket: React.FC = () => {
                 <div className="w-8 h-px bg-slate-700 hidden md:block mt-16"></div>
 
                 {/* Divisional Column */}
-                <div className="flex flex-col gap-8 mt-8">
+                <div className="flex flex-col gap-16">
                      <div className="text-center text-xs font-bold text-slate-500 uppercase mb-2">Divisional</div>
-                     {/* 1 Seed BYE Slot */}
-                     <GameCard placeholder="1 Seed Bye" teamOverride={seed1} />
                      
-                     {games.div.length > 0 ? games.div.map((g: Game) => <GameCard key={g.id} game={g} placeholder="" />) :
-                        [1].map(i => <GameCard key={i} placeholder={`${conf} Divisional Matchup`} />)
-                     }
+                     {/* Game 1: 1 Seed vs Lowest Seed */}
+                     {games.div.length > 0 && games.div.some((g: Game) => g.homeTeam.abbreviation === seed1.abbreviation || g.awayTeam.abbreviation === seed1.abbreviation) ? (
+                         games.div.filter((g: Game) => g.homeTeam.abbreviation === seed1.abbreviation || g.awayTeam.abbreviation === seed1.abbreviation).map((g: Game) => (
+                             <GameCard key={g.id} game={g} placeholder="" />
+                         ))
+                     ) : (
+                        <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 w-64 shadow-lg relative z-10">
+                            <div className="text-[10px] text-slate-500 mb-2 uppercase tracking-wider flex justify-between">
+                                <span>TBD</span>
+                                <span className="text-slate-600">Waiting on WC</span>
+                            </div>
+                            {/* Lowest Seed Placeholder */}
+                            <div className="flex justify-between items-center mb-1 opacity-50">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-5 h-5 rounded-full bg-slate-800"></div>
+                                    <span className="font-bold text-sm text-slate-500">Lowest WC Winner</span>
+                                </div>
+                            </div>
+                            {/* #1 Seed Home */}
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <img src={seed1.logoUrl} className="w-5 h-5 object-contain" alt="" />
+                                    <span className="font-bold text-sm truncate w-32">{seed1.name}</span>
+                                </div>
+                                <span className="bg-green-900/30 text-green-400 text-[9px] px-1.5 py-0.5 rounded border border-green-900/50">#1 Seed</span>
+                            </div>
+                        </div>
+                     )}
+
+                     {/* Game 2: Remaining Matchup */}
+                     {games.div.length > 0 && !games.div.some((g: Game) => g.homeTeam.abbreviation === seed1.abbreviation || g.awayTeam.abbreviation === seed1.abbreviation) ? (
+                         games.div.filter((g: Game) => g.homeTeam.abbreviation !== seed1.abbreviation && g.awayTeam.abbreviation !== seed1.abbreviation).map((g: Game) => (
+                             <GameCard key={g.id} game={g} placeholder="" />
+                         ))
+                     ) : (
+                        <GameCard placeholder={`${conf} Divisional Matchup`} />
+                     )}
                 </div>
 
                 <div className="w-8 h-px bg-slate-700 hidden md:block mt-16"></div>
