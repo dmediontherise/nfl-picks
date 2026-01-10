@@ -25,6 +25,8 @@ export interface Game {
   venue: string;
   homeTeam: Team;
   awayTeam: Team;
+  seasonType?: number; // 2 = Regular, 3 = Postseason
+  isNeutralSite?: boolean;
   status?: 'pre' | 'in' | 'post'; // Game status
   clock?: string; // e.g. "10:35 4th"
   bettingData?: {

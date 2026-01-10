@@ -213,8 +213,19 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   awayElo -= applyEloInjuryPenalty(away, awayNewsSnippet);
 
   // --- 4. HOME FIELD ADVANTAGE ---
-  const HFA = 55;
+  let HFA = 55;
+  if (game.isNeutralSite || (game.seasonType === 3 && game.week === 5)) { // Week 5 of playoffs is Super Bowl
+      HFA = 0;
+  }
   homeElo += HFA;
+
+  // --- PLAYOFF INTENSITY MULTIPLIER (PDF Insight: Playoff flag is #1 feature) ---
+  if (game.seasonType === 3) {
+      // "Defense wins championships" - Boost defensive rating weight
+      // Boost QB Experience weight (implicit in QB stats but we can amplify)
+      homeElo += (home.defRating - 75) * 2; // Reward good defenses more
+      awayElo += (away.defRating - 75) * 2;
+  }
 
   // --- 5. WIN PROBABILITY & SPREAD ---
   const eloDiff = homeElo - awayElo;
@@ -224,11 +235,13 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   // --- 6. PARSE VEGAS DATA ---
   let vegaSpread = 0;
   let vegasTotal = 44;
+  let hasVegasData = false;
 
   if (game.bettingData) {
     vegasTotal = game.bettingData.total;
     const spreadParts = game.bettingData.spread.split(' ');
     if (spreadParts.length >= 2) {
+      hasVegasData = true;
       const favAbbr = spreadParts[0];
       const points = parseFloat(spreadParts[spreadParts.length - 1]);
       if (favAbbr === home.abbreviation) vegaSpread = Math.abs(points);
@@ -236,10 +249,23 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     }
   }
 
-  // --- 7. FINAL SCORING MODEL ---
-  const predictedTotal = vegasTotal; 
-  let finalHomeScore = (predictedTotal + projectedSpread) / 2;
-  let finalAwayScore = (predictedTotal - projectedSpread) / 2;
+  // --- 7. FINAL SCORING MODEL (ENSEMBLE APPROACH) ---
+  // PDF Insight: Vegas Probabilities are highly predictive. 
+  // We blend our Elo model with the Market's implied score.
+  
+  // Model A: Pure Elo
+  const eloHomeScore = (vegasTotal + projectedSpread) / 2;
+  const eloAwayScore = (vegasTotal - projectedSpread) / 2;
+
+  // Model B: Vegas Implied
+  const vegasHomeScore = (vegasTotal + vegaSpread) / 2;
+  const vegasAwayScore = (vegasTotal - vegaSpread) / 2;
+
+  // Ensemble Weighting (70% Elo, 30% Vegas - giving our model agency but respecting the market)
+  const blendWeight = hasVegasData ? 0.3 : 0;
+  
+  let finalHomeScore = (eloHomeScore * (1 - blendWeight)) + (vegasHomeScore * blendWeight);
+  let finalAwayScore = (eloAwayScore * (1 - blendWeight)) + (vegasAwayScore * blendWeight);
 
   // --- 8. APPLY VARIANCE ---
   const getSeededRandom = (seed: string) => {
@@ -365,7 +391,14 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
   };
 
   const narrative = constructNarrative();
-  const predictionConfidence = Math.min(99, Math.round(50 + Math.abs(finalHomeScore - finalAwayScore) * 2));
+  
+  // PDF Insight: The "No Bet" Zone (40-60% win probability)
+  // If the game is too close, confidence should tank to reflect "Coin Flip" nature.
+  let baseConfidence = 50 + Math.abs(finalHomeScore - finalAwayScore) * 3;
+  if (homeWinProb > 0.40 && homeWinProb < 0.60) {
+      baseConfidence = Math.min(baseConfidence, 45); // Cap at 45% (Low Confidence)
+  }
+  const predictionConfidence = Math.min(99, Math.round(baseConfidence));
 
   // Dynamic Players to Watch
   const generatePlayersToWatch = () => {

@@ -104,6 +104,8 @@ export const espnApi = {
             return {
                 id: event.id,
                 week: event.week.number,
+                seasonType: event.season?.type,
+                isNeutralSite: event.competitions[0]?.neutralSite || false,
                 date: event.date, // ISO string
                 venue: comp.venue?.fullName || "Unknown",
                 status: event.status.type.state, // 'pre', 'in', 'post'
