@@ -1,3 +1,6 @@
+import { Prediction, Narrative } from './engine/types';
+export * from './engine/types';
+
 export interface Team {
   id: string;
   name: string;
@@ -55,8 +58,10 @@ export interface AnalysisResult {
   confidenceScore: number;
   summary: string;
   keyFactors: string[];
+  prediction?: Prediction;
+  narrativeDetails?: Narrative;
   
-  // New Medi Jinx Specifics
+  // Game Intelligence Metrics
   jinxScore: number;          // 1-10 scale
   jinxAnalysis: string;       // Contextual reason for the "Trap"
   upsetProbability: number;   // Percentage

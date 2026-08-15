@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AnalysisModal from './components/AnalysisModal';
 import { StandingsModal } from './StandingsModal';
 import PlayoffBracket from './components/PlayoffBracket';
@@ -8,16 +8,8 @@ import { userService } from './services/userService';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthStatus } from './components/AuthStatus';
 import { downloadPredictionsAsCSV } from './utils/csvExporter';
-import { Calendar, MapPin, ChevronRight, RefreshCw, Server, Loader2, Download, Trophy, GitBranch } from 'lucide-react';
-
-const rounds = [
-    { id: 'w17', label: 'Week 17', week: 17, type: 2 },
-    { id: 'w18', label: 'Week 18', week: 18, type: 2 },
-    { id: 'wc', label: 'Wild Card', week: 1, type: 3 },
-    { id: 'div', label: 'Divisional', week: 2, type: 3 },
-    { id: 'conf', label: 'Conf Champ', week: 3, type: 3 },
-    { id: 'sb', label: 'Super Bowl', week: 5, type: 3 },
-];
+import { CURRENT_SEASON, SEASON_STAGES, SeasonStage } from './data/nfl_data';
+import { Calendar, MapPin, ChevronRight, RefreshCw, Server, Loader2, Download, Trophy, GitBranch, AlertCircle } from 'lucide-react';
 
 const MediPicksApp: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
@@ -35,7 +27,7 @@ const MediPicksApp: React.FC = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [meta, setMeta] = useState<any>(null);
-  const [currentRound, setCurrentRound] = useState(rounds[2]); // Default to Wild Card
+  const [currentStage, setCurrentStage] = useState<SeasonStage>(SEASON_STAGES[0]); // Default to Week 1
 
   // Load User Data on Auth Change
   useEffect(() => {
@@ -47,16 +39,30 @@ const MediPicksApp: React.FC = () => {
     loadData();
   }, [user, authLoading]);
 
+  const fetchData = useCallback(async (stage: SeasonStage) => {
+    setDataLoading(true);
+    try {
+      const response = await espnApi.getSchedule(stage.week, stage.seasonType);
+      setGames(response.data);
+      setMeta(response.meta);
+    } catch (error) {
+      console.error("Failed to fetch ESPN data", error);
+      setMeta({ status: "ERROR", season: CURRENT_SEASON, week: stage.week });
+    } finally {
+      setDataLoading(false);
+    }
+  }, []);
+
   // Initial Fetch & Auto-Refresh (Realtime)
   useEffect(() => {
     if (view === 'games') {
-        fetchData(currentRound);
-        const interval = setInterval(() => fetchData(currentRound), 60000); // 60s Refresh
-        return () => clearInterval(interval);
+      fetchData(currentStage);
+      const interval = setInterval(() => fetchData(currentStage), 60000); // 60s Refresh
+      return () => clearInterval(interval);
     }
-  }, [currentRound, view]);
+  }, [currentStage, view, fetchData]);
 
-  // Save & Update Results (Local Only for now as it is app-wide data)
+  // Save & Update Results (Local Only for completed games)
   useEffect(() => {
     localStorage.setItem('mediPicks_results', JSON.stringify(gameResults));
   }, [gameResults]);
@@ -66,41 +72,28 @@ const MediPicksApp: React.FC = () => {
     if (games.length === 0) return;
     
     setGameResults(prev => {
-        const next = { ...prev };
-        let changed = false;
-        
-        games.forEach(g => {
-            if (g.status === 'post' && g.homeTeam.score !== undefined && g.awayTeam.score !== undefined) {
-                if (!next[g.id]) {
-                    next[g.id] = {
-                        homeScore: g.homeTeam.score,
-                        awayScore: g.awayTeam.score,
-                        spread: g.bettingData?.spread || "",
-                        homeAbbr: g.homeTeam.abbreviation,
-                        awayAbbr: g.awayTeam.abbreviation,
-                        homeName: g.homeTeam.name,
-                        awayName: g.awayTeam.name
-                    };
-                    changed = true;
-                }
-            }
-        });
-        return changed ? next : prev;
+      const next = { ...prev };
+      let changed = false;
+      
+      games.forEach(g => {
+        if (g.status === 'post' && g.homeTeam.score !== undefined && g.awayTeam.score !== undefined) {
+          if (!next[g.id]) {
+            next[g.id] = {
+              homeScore: g.homeTeam.score,
+              awayScore: g.awayTeam.score,
+              spread: g.bettingData?.spread || "",
+              homeAbbr: g.homeTeam.abbreviation,
+              awayAbbr: g.awayTeam.abbreviation,
+              homeName: g.homeTeam.name,
+              awayName: g.awayTeam.name
+            };
+            changed = true;
+          }
+        }
+      });
+      return changed ? next : prev;
     });
   }, [games]);
-
-  const fetchData = async (round: typeof rounds[0]) => {
-    if (games.length === 0) setDataLoading(true);
-    try {
-      const response = await espnApi.getSchedule(round.week, round.type);
-      setGames(response.data);
-      setMeta(response.meta);
-    } catch (error) {
-      console.error("Failed to fetch ESPN data", error);
-    } finally {
-      setDataLoading(false);
-    }
-  };
 
   const handleSavePrediction = async (prediction: UserPrediction) => {
     const newPredictions = {
@@ -120,6 +113,9 @@ const MediPicksApp: React.FC = () => {
 
   if (authLoading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-blue-500 w-8 h-8"/></div>;
 
+  const regStages = SEASON_STAGES.filter(s => s.seasonType === 2);
+  const playoffStages = SEASON_STAGES.filter(s => s.seasonType === 3);
+
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-blue-500/30">
       
@@ -129,13 +125,13 @@ const MediPicksApp: React.FC = () => {
           <div className="w-full flex flex-col md:flex-row items-center justify-between gap-4 md:gap-0">
             <div>
               <h1 className="text-2xl font-black tracking-tighter text-white flex items-center gap-2">
-                MEDI PICKS <span className="text-blue-500">2025</span>
-                <span className="text-[10px] bg-red-600/20 text-red-400 px-2 py-0.5 rounded border border-red-600/30 font-mono tracking-widest animate-pulse">
-                  LIVE
+                MEDI PICKS <span className="text-blue-500">{CURRENT_SEASON}</span>
+                <span className="text-[10px] bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded border border-blue-600/30 font-mono tracking-widest">
+                  PRESEASON
                 </span>
               </h1>
               <p className="text-xs text-slate-400 font-medium tracking-wide uppercase flex items-center gap-2 mt-1">
-                {currentRound.label} • Season {meta?.season || 2025}
+                {currentStage.label} • Season {meta?.season || CURRENT_SEASON}
                 <span className="text-slate-600">|</span>
                 <Server className="w-3 h-3 text-slate-500" />
                 <span className="text-slate-500">ESPN Realtime</span>
@@ -181,7 +177,7 @@ const MediPicksApp: React.FC = () => {
               <div className="w-px h-6 bg-slate-700 mx-1"></div>
 
               <button 
-                onClick={() => fetchData(currentRound)}
+                onClick={() => fetchData(currentStage)}
                 className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 transition-colors border border-slate-700 text-slate-400 hover:text-white"
                 title="Refresh Live Data"
               >
@@ -190,22 +186,45 @@ const MediPicksApp: React.FC = () => {
             </div>
           </div>
 
-          {/* Week Selector Tabs */}
+          {/* Week Selector Tabs (22 Stages) */}
           {view === 'games' && (
-            <div className="w-full flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-                {rounds.map((r) => (
-                <button
-                    key={r.id}
-                    onClick={() => setCurrentRound(r)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
-                    currentRound.id === r.id 
+            <div className="w-full flex items-center gap-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+              {/* Regular Season Group */}
+              <div className="flex items-center gap-1">
+                {regStages.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setCurrentStage(s)}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                      currentStage.id === s.id 
                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' 
                         : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
                     }`}
-                >
-                    {r.label}
-                </button>
+                  >
+                    {s.label}
+                  </button>
                 ))}
+              </div>
+
+              {/* Visual Separator */}
+              <div className="h-6 w-px bg-slate-700 mx-2 flex-shrink-0"></div>
+
+              {/* Playoff Group */}
+              <div className="flex items-center gap-1">
+                {playoffStages.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setCurrentStage(s)}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                      currentStage.id === s.id 
+                        ? 'bg-yellow-500 text-slate-950 font-black shadow-lg shadow-yellow-900/50' 
+                        : 'bg-slate-800/80 text-yellow-400/80 hover:bg-slate-700 hover:text-yellow-300 border border-yellow-500/20'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -214,16 +233,35 @@ const MediPicksApp: React.FC = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
         {view === 'bracket' ? (
-            <PlayoffBracket />
+          <PlayoffBracket />
+        ) : meta?.status === "ERROR" ? (
+          <div className="flex flex-col items-center justify-center py-16 bg-red-950/20 border border-red-800/50 rounded-2xl p-8 text-center max-w-lg mx-auto">
+            <AlertCircle className="w-12 h-12 text-red-400 mb-4" />
+            <h3 className="text-lg font-bold text-white mb-2">Unable to Load Schedule</h3>
+            <p className="text-sm text-slate-400 mb-6">Failed to retrieve data for {currentStage.label}. Please try refreshing.</p>
+            <button
+              onClick={() => fetchData(currentStage)}
+              className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg"
+            >
+              Retry Schedule Fetch
+            </button>
+          </div>
         ) : dataLoading && games.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64">
             <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-            <p className="text-slate-400 animate-pulse text-sm uppercase tracking-widest">Connecting to Satellite...</p>
+            <p className="text-slate-400 animate-pulse text-sm uppercase tracking-widest">Loading {CURRENT_SEASON} Schedule...</p>
+          </div>
+        ) : games.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 bg-slate-900/50 border border-slate-800 rounded-2xl p-8 text-center max-w-lg mx-auto">
+            <Calendar className="w-12 h-12 text-slate-600 mb-4" />
+            <h3 className="text-lg font-bold text-white mb-2">No Games Scheduled</h3>
+            <p className="text-sm text-slate-400">No games are scheduled for {currentStage.label} of season {CURRENT_SEASON}.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {games.map((game) => {
               const prediction = userPredictions[game.id];
+              const isPreGame = game.status === 'pre' || !game.status;
               
               return (
                 <div 
@@ -234,54 +272,22 @@ const MediPicksApp: React.FC = () => {
                   {/* Prediction Overlay Badge */}
                   {prediction && (
                     <div className="absolute top-[44px] right-2 flex flex-col items-end gap-1 z-10">
-                        <div className="bg-green-500/20 border border-green-500/50 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
+                      <div className="bg-green-500/20 border border-green-500/50 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
                         PICK LOCKED
-                        </div>
-                        {game.status === 'post' && (
-                            <>
-                                {/* Outright Accuracy */}
-                                {(() => {
-                                    const actualWinner = (game.homeTeam.score || 0) > (game.awayTeam.score || 0) ? game.homeTeam.name : game.awayTeam.name;
-                                    const hit = actualWinner === prediction.predictedWinner;
-                                    return (
-                                        <div className={`px-2 py-0.5 rounded border text-[10px] font-bold ${hit ? 'bg-green-900/50 border-green-500 text-green-400' : 'bg-red-900/50 border-red-500 text-red-400'}`}>
-                                            {hit ? 'WINNER ✅' : 'WINNER ❌'}
-                                        </div>
-                                    );
-                                })()}
-                                {/* ATS Accuracy */}
-                                {(() => {
-                                    if (!game.bettingData?.spread) return null;
-                                    const parts = game.bettingData.spread.split(' ');
-                                    if (parts.length < 2) return null;
-                                    const favAbbr = parts[0];
-                                    const line = parseFloat(parts[1]);
-                                    
-                                    const homeScore = game.homeTeam.score || 0;
-                                    const awayScore = game.awayTeam.score || 0;
-                                    const margin = favAbbr === game.homeTeam.abbreviation ? (homeScore - awayScore) : (awayScore - homeScore);
-                                    
-                                    // Check if Fav Covered
-                                    const favCovered = (margin + line) > 0;
-                                    const push = (margin + line) === 0;
-
-                                    // Did we pick Fav?
-                                    const favName = favAbbr === game.homeTeam.abbreviation ? game.homeTeam.name : game.awayTeam.name;
-                                    const pickedFav = prediction.predictedWinner === favName;
-                                    
-                                    let result = "MISS";
-                                    if (push) result = "PUSH";
-                                    else if (favCovered && pickedFav) result = "HIT";
-                                    else if (!favCovered && !pickedFav) result = "HIT";
-
-                                    return (
-                                        <div className={`px-2 py-0.5 rounded border text-[10px] font-bold ${result === 'HIT' ? 'bg-green-900/50 border-green-500 text-green-400' : result === 'PUSH' ? 'bg-yellow-900/50 border-yellow-500 text-yellow-400' : 'bg-red-900/50 border-red-500 text-red-400'}`}>
-                                            ATS {result === 'HIT' ? '✅' : result === 'PUSH' ? '➖' : '❌'}
-                                        </div>
-                                    );
-                                })()}
-                            </>
-                        )}
+                      </div>
+                      {game.status === 'post' && (
+                        <>
+                          {(() => {
+                            const actualWinner = (game.homeTeam.score || 0) > (game.awayTeam.score || 0) ? game.homeTeam.name : game.awayTeam.name;
+                            const hit = actualWinner === prediction.predictedWinner;
+                            return (
+                              <div className={`px-2 py-0.5 rounded border text-[10px] font-bold ${hit ? 'bg-green-900/50 border-green-500 text-green-400' : 'bg-red-900/50 border-red-500 text-red-400'}`}>
+                                {hit ? 'WINNER ✅' : 'WINNER ❌'}
+                              </div>
+                            );
+                          })()}
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -292,17 +298,17 @@ const MediPicksApp: React.FC = () => {
                       {new Date(game.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                     </div>
                     {game.status === 'in' ? (
-                        <div className="flex items-center gap-1 text-red-500 font-bold animate-pulse">
-                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                            LIVE • {game.clock}
-                        </div>
+                      <div className="flex items-center gap-1 text-red-500 font-bold animate-pulse">
+                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                        LIVE • {game.clock}
+                      </div>
                     ) : game.status === 'post' ? (
-                        <div className="font-bold text-slate-300">FINAL</div>
+                      <div className="font-bold text-slate-300">FINAL</div>
                     ) : (
-                        <div className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            {game.venue.split(' ')[0]}...
-                        </div>
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {game.venue ? game.venue.split(' ')[0] : 'TBD'}
+                      </div>
                     )}
                   </div>
 
@@ -316,15 +322,14 @@ const MediPicksApp: React.FC = () => {
                         <div>
                           <div className="text-xl font-bold text-white leading-none">{game.awayTeam.abbreviation}</div>
                           <div className="text-[10px] text-slate-500 font-bold">
-                            {game.awayTeam.name.split(' ').pop()} <span className="text-slate-600 font-normal">({game.awayTeam.record})</span>
+                            {game.awayTeam.name.split(' ').pop()} <span className="text-slate-600 font-normal">({game.awayTeam.record || "0-0"})</span>
                           </div>
                         </div>
                       </div>
-                      {/* Show Prediction OR Live Score */}
-                      {(game.status !== 'pre' && game.awayTeam.score !== undefined) ? (
-                          <span className="text-2xl font-mono font-black text-white">{game.awayTeam.score}</span>
-                      ) : prediction && (
-                        <span className="text-xl font-mono font-bold text-slate-500">{prediction.awayScore}</span>
+                      {!isPreGame && game.awayTeam.score !== undefined ? (
+                        <span className="text-2xl font-mono font-black text-white">{game.awayTeam.score}</span>
+                      ) : (
+                        <span className="text-xs font-mono text-slate-600">--</span>
                       )}
                     </div>
 
@@ -340,14 +345,14 @@ const MediPicksApp: React.FC = () => {
                         <div>
                           <div className="text-xl font-bold text-white leading-none">{game.homeTeam.abbreviation}</div>
                           <div className="text-[10px] text-slate-500 font-bold">
-                            {game.homeTeam.name.split(' ').pop()} <span className="text-slate-600 font-normal">({game.homeTeam.record})</span>
+                            {game.homeTeam.name.split(' ').pop()} <span className="text-slate-600 font-normal">({game.homeTeam.record || "0-0"})</span>
                           </div>
                         </div>
                       </div>
-                      {(game.status !== 'pre' && game.homeTeam.score !== undefined) ? (
-                          <span className="text-2xl font-mono font-black text-white">{game.homeTeam.score}</span>
-                      ) : prediction && (
-                        <span className="text-xl font-mono font-bold text-slate-500">{prediction.homeScore}</span>
+                      {!isPreGame && game.homeTeam.score !== undefined ? (
+                        <span className="text-2xl font-mono font-black text-white">{game.homeTeam.score}</span>
+                      ) : (
+                        <span className="text-xs font-mono text-slate-600">--</span>
                       )}
                     </div>
 
@@ -379,9 +384,9 @@ const MediPicksApp: React.FC = () => {
       
       {showStandings && (
         <StandingsModal 
-            onClose={() => setShowStandings(false)} 
-            predictions={userPredictions}
-            results={gameResults}
+          onClose={() => setShowStandings(false)} 
+          predictions={userPredictions}
+          results={gameResults}
         />
       )}
 

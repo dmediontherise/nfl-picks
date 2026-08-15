@@ -3,7 +3,7 @@ import { Team } from '../types';
 // Narrative templates based on Team Status and Attributes
 const HEADLINES = {
   Clinched: [
-    "Rest vs. Rust: Debate heats up on playing starters Week 16.",
+    "Rest vs. Rust: Debate heats up on playing starters late in the season.",
     "Eyes on the Prize: Coordinator focused on 'generic' gameplan to hide schemes.",
     "Home Field Advantage: The path to the Super Bowl runs through here.",
     "Chasing History: Team looking to set franchise record for wins."
@@ -40,10 +40,9 @@ export const generateTeamNews = (team: Team, seed?: string): string[] => {
 
   // Helper for consistent random index if seed provided
   const getIndex = (max: number) => {
-    if (!seed) return Math.floor(Math.random() * max);
-    
+    const s = seed || team.id || 'default_seed';
     let hash = 0;
-    const input = seed + team.id; // Unique per team per game
+    const input = s + team.id; // Unique per team per game
     for (let i = 0; i < input.length; i++) {
       const char = input.charCodeAt(i);
       hash = ((hash << 5) - hash) + char;
@@ -61,8 +60,9 @@ export const generateTeamNews = (team: Team, seed?: string): string[] => {
   // 2. Injury-based Headline (if injuries exist)
   if (team.keyInjuries && team.keyInjuries.length > 0) {
     const injury = team.keyInjuries[0]; // Primary injury
+    const injuryHead = INJURY_HEADLINES[getIndex(INJURY_HEADLINES.length)];
     if (injury.includes("IR")) {
-      news.push(`Devastating Blow: ${injury.split('(')[0]} officially shut down. Offense looking for answers.`);
+      news.push(`Devastating Blow: ${injury.split('(')[0]} shut down. ${injuryHead}`);
     } else if (injury.includes("Q")) {
       news.push(`Optimism growing for ${injury.split('(')[0]} but likely on a 'pitch count'.`);
     } else if (injury.includes("Rodgers")) {
@@ -70,7 +70,7 @@ export const generateTeamNews = (team: Team, seed?: string): string[] => {
     } else if (injury.includes("Rivers")) {
       news.push("Old School: Rivers getting up to speed with playbook in record time.");
     } else {
-      news.push(`${injury} situation looming large over game prep.`);
+      news.push(`${injury} situation looming over game prep. ${injuryHead}`);
     }
   }
 
