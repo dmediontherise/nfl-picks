@@ -1,0 +1,139 @@
+{
+  "generatedAt": "2026-08-15T11:20:00Z",
+  "season": 2025,
+  "modelsCompared": 5,
+  "trainGamesCount": 178,
+  "holdoutGamesCount": 107,
+  "models": {
+    "elo_qb": {
+      "name": "FiveThirtyEight / nfelo Margin-of-Victory Elo",
+      "description": "Elo rating system with margin of victory multiplier",
+      "train": {
+        "games": 178,
+        "atsExcluded": 0,
+        "suAccuracy": 0.618,
+        "atsAccuracy": 0.4746,
+        "atsRecord": "84-93-1",
+        "brierScore": 0.2264,
+        "logLoss": 0.6464,
+        "meanAbsScoreError": 7.5309,
+        "roiAt110": -0.0935
+      },
+      "holdout": {
+        "games": 107,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6542,
+        "atsAccuracy": 0.5047,
+        "atsRecord": "54-53-0",
+        "brierScore": 0.2189,
+        "logLoss": 0.6248,
+        "meanAbsScoreError": 7.7991,
+        "roiAt110": -0.0365
+      }
+    },
+    "dvoa_efficiency": {
+      "name": "DVOA-Style Opponent-Adjusted Efficiency",
+      "description": "Opponent-adjusted offensive and defensive scoring efficiency ratings",
+      "train": {
+        "games": 178,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6011,
+        "atsAccuracy": 0.4915,
+        "atsRecord": "87-90-1",
+        "brierScore": 0.222,
+        "logLoss": 0.6343,
+        "meanAbsScoreError": 7.632,
+        "roiAt110": -0.0613
+      },
+      "holdout": {
+        "games": 107,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6355,
+        "atsAccuracy": 0.5607,
+        "atsRecord": "60-47-0",
+        "brierScore": 0.2245,
+        "logLoss": 0.6367,
+        "meanAbsScoreError": 7.7056,
+        "roiAt110": 0.0705
+      }
+    },
+    "massey_rating": {
+      "name": "Massey Least-Squares Power Ratings",
+      "description": "Least-squares team ratings solved from historical point differentials",
+      "train": {
+        "games": 178,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6011,
+        "atsAccuracy": 0.4689,
+        "atsRecord": "83-94-1",
+        "brierScore": 0.2233,
+        "logLoss": 0.6371,
+        "meanAbsScoreError": 7.5,
+        "roiAt110": -0.1042
+      },
+      "holdout": {
+        "games": 107,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6168,
+        "atsAccuracy": 0.5701,
+        "atsRecord": "61-46-0",
+        "brierScore": 0.2326,
+        "logLoss": 0.6575,
+        "meanAbsScoreError": 7.8645,
+        "roiAt110": 0.0884
+      }
+    },
+    "pythagorean_reg": {
+      "name": "Pythagorean Expectation & Point Diff Regression",
+      "description": "Bill James / Morey Pythagorean win expectation and shrunk point differential",
+      "train": {
+        "games": 178,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6067,
+        "atsAccuracy": 0.4943,
+        "atsRecord": "87-89-2",
+        "brierScore": 0.2216,
+        "logLoss": 0.634,
+        "meanAbsScoreError": 7.5,
+        "roiAt110": -0.0557
+      },
+      "holdout": {
+        "games": 107,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6355,
+        "atsAccuracy": 0.5421,
+        "atsRecord": "58-49-0",
+        "brierScore": 0.2238,
+        "logLoss": 0.6363,
+        "meanAbsScoreError": 7.8178,
+        "roiAt110": 0.0348
+      }
+    },
+    "market_blend": {
+      "name": "Market-Blend Consensus Model",
+      "description": "Weighted combination of fundamental power rating margin and sportsbook consensus spread",
+      "train": {
+        "games": 178,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6854,
+        "atsAccuracy": 0.4633,
+        "atsRecord": "82-95-1",
+        "brierScore": 0.207,
+        "logLoss": 0.6046,
+        "meanAbsScoreError": 7.3511,
+        "roiAt110": -0.1149
+      },
+      "holdout": {
+        "games": 107,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6075,
+        "atsAccuracy": 0.5283,
+        "atsRecord": "56-50-1",
+        "brierScore": 0.218,
+        "logLoss": 0.6187,
+        "meanAbsScoreError": 7.7617,
+        "roiAt110": 0.0085
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "generatedAt": "2026-08-15T11:43:00Z",
+  "season": 2025,
+  "engineVersion": "massey-v1.0.0",
+  "train": {
+    "games": 178,
+    "atsExcluded": 0,
+    "suAccuracy": 0.6067,
+    "atsAccuracy": 0.4689,
+    "atsRecord": "83-94-1",
+    "brierScore": 0.2233,
+    "logLoss": 0.6371,
+    "meanAbsScoreError": 7.5506,
+    "roiAt110": -0.1042,
+    "totalPickAccuracy": 0.4438,
+    "meanAbsTotalError": 11.0904
+  },
+  "holdout": {
+    "games": 107,
+    "atsExcluded": 0,
+    "suAccuracy": 0.6168,
+    "atsAccuracy": 0.5701,
+    "atsRecord": "61-46-0",
+    "brierScore": 0.2326,
+    "logLoss": 0.6575,
+    "meanAbsScoreError": 7.5421,
+    "roiAt110": 0.0884,
+    "totalPickAccuracy": 0.5701,
+    "meanAbsTotalError": 10.1841
+  }
+}

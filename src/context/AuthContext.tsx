@@ -17,7 +17,7 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [demoMode, setDemoMode] = useState(!isFirebaseConfigured());
+  const [demoMode] = useState(!isFirebaseConfigured());
 
   useEffect(() => {
     // If keys aren't set, skip auth listener

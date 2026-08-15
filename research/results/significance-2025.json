@@ -1,0 +1,84 @@
+{
+  "modelsCompared": 5,
+  "selectionAdjustmentMethod": "Sidak",
+  "selectionAdjustedPValue": 0.6199,
+  "anySignificantAfterSelection": false,
+  "interpretation": "The holdout ATS performance of the winning model (57.01%, 61-46-0) across 107 games carries a 95% Wilson confidence interval of [47.55%, 65.99%]. This interval contains both 50.0% and the 52.38% sportsbook break-even threshold. After Šidák adjustment for selection bias across 5 tested candidate models, the result is not statistically distinguishable from chance (adjusted p = 0.6199).",
+  "models": {
+    "elo_qb": {
+      "atsWins": 54,
+      "atsLosses": 53,
+      "atsPushes": 0,
+      "n": 107,
+      "atsAccuracy": 0.5047,
+      "standardError": 0.0483,
+      "wilson95": {
+        "lower": 0.4114,
+        "upper": 0.5976
+      },
+      "pValueVsCoinflip": 1,
+      "pValueVsBreakeven": 0.689,
+      "beatsBreakevenSignificantly": false
+    },
+    "dvoa_efficiency": {
+      "atsWins": 60,
+      "atsLosses": 47,
+      "atsPushes": 0,
+      "n": 107,
+      "atsAccuracy": 0.5607,
+      "standardError": 0.048,
+      "wilson95": {
+        "lower": 0.4662,
+        "upper": 0.6511
+      },
+      "pValueVsCoinflip": 0.246,
+      "pValueVsBreakeven": 0.2519,
+      "beatsBreakevenSignificantly": false
+    },
+    "massey_rating": {
+      "atsWins": 61,
+      "atsLosses": 46,
+      "atsPushes": 0,
+      "n": 107,
+      "atsAccuracy": 0.5701,
+      "standardError": 0.0479,
+      "wilson95": {
+        "lower": 0.4755,
+        "upper": 0.6599
+      },
+      "pValueVsCoinflip": 0.1759,
+      "pValueVsBreakeven": 0.1943,
+      "beatsBreakevenSignificantly": false
+    },
+    "pythagorean_reg": {
+      "atsWins": 58,
+      "atsLosses": 49,
+      "atsPushes": 0,
+      "n": 107,
+      "atsAccuracy": 0.5421,
+      "standardError": 0.0482,
+      "wilson95": {
+        "lower": 0.4478,
+        "upper": 0.6334
+      },
+      "pValueVsCoinflip": 0.4393,
+      "pValueVsBreakeven": 0.3892,
+      "beatsBreakevenSignificantly": false
+    },
+    "market_blend": {
+      "atsWins": 56,
+      "atsLosses": 50,
+      "atsPushes": 1,
+      "n": 106,
+      "atsAccuracy": 0.5283,
+      "standardError": 0.0485,
+      "wilson95": {
+        "lower": 0.434,
+        "upper": 0.6207
+      },
+      "pValueVsCoinflip": 0.6272,
+      "pValueVsBreakeven": 0.5018,
+      "beatsBreakevenSignificantly": false
+    }
+  }
+}

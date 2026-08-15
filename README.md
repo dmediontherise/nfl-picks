@@ -1,36 +1,41 @@
-# Medi Picks 2025
+# Medi Picks 2026
 
-**Medi Picks 2025** is an advanced NFL prediction application powered by Medi Jinx AI. It provides real-time analysis, score predictions, and spread insights for every NFL matchup.
+**Medi Picks 2026** is an advanced NFL prediction application powered by a quantitative Massey decision engine. It provides analysis, score projections, spread edges, and machine-readable driver breakdowns for every 2026 NFL season matchup.
+
+## 2026 Season Behavior
+
+The application is configured for the **2026 NFL season**:
+- **Default Stage**: Opens on regular-season Week 1 (`seasonType=2`, `week=1`).
+- **22 Stage Coverage**: Offers navigation across all 18 regular season weeks and all 4 postseason stages (Wild Card, Divisional, Conference Championships, Super Bowl).
+- **Preseason Baseline**: All team records begin at `0-0` before Week 1 kickoff.
+- **Configuring Future Seasons**: To update the application season for future years, modify the single exported constant `export const CURRENT_SEASON = 2026` in `src/data/nfl_data.ts`. All API calls and UI labels derive from this constant.
+
+## How to read the model's track record
+
+Historical model performance is evaluated over a 107-game out-of-sample holdout set from the 2025 season:
+- **Holdout ATS Point Estimate**: 57.01% (61–46–0 record across $n = 107$ games).
+- **95% Wilson Confidence Interval**: [47.55%, 65.99%].
+- **Interpretation**: Because the 95% confidence interval straddles both 50.0% and the 52.38% sportsbook break-even threshold, single-season historical ATS performance is subject to sample variance and selection bias and is not a projection of future performance.
 
 ## Key Features
 
-### 🏈 Real-time Game Tracking
-- **Live Scoreboard:** Displays real-time scores, game clocks, and quarters for all active NFL games.
-- **Auto-Refresh:** Data updates automatically every 60 seconds to ensure you never miss a play.
-- **Week Selection:** Navigate through the entire end-of-season schedule (Weeks 14-18) to plan ahead or review past performance.
-- **Smart Schedule:** Automatically defaults to the current active week for instant access to live action.
+### 🏈 Full Season Schedule & Stage Navigation
+- **22 Season Stages:** Seamlessly switch between regular season Weeks 1–18 and Postseason stages (Wild Card, Divisional, Conference Championships, Super Bowl).
+- **ESPN Realtime Adapter:** Queries current season schedules with explicit `dates` parameters.
+- **Pre-Kickoff UI:** Displays clean match cards with spread lines and kickoff dates for upcoming games.
 
-### 🧠 Medi Jinx Intel
-- **Elo-Based Prediction Engine:** Utilizes a robust NFELO-style model that calculates win probabilities and spreads based on team efficiency ratings and QB "Value Over Replacement" adjustments.
-- **Dynamic Narrative:** The "Medi Intel" engine crafts varied, personality-driven stories for each matchup, reacting to the spread, score differential, and motivation levels (e.g., "Business Trip" vs "Playoff Preview").
-- **Medi Retrospective:** (New) Post-game analysis that synthesizes real headlines to explain the "Key to Victory" and identify standout performers for completed matchups.
-- **Real News Integration:** Fetches live news from the ESPN API and weaves actual headlines (injuries, roster moves) into the analysis to adjust predictions dynamically.
-- **Dynamic Leverage:** Visualizes the "Tug of War" between teams based on real-time Offensive, Defensive, and Quarterback ratings.
+### 🧠 Quantitative Decision Engine & Driver Intel
+- **Massey Least-Squares Engine:** Pure, deterministic engine under `src/engine/` fit on historical efficiency with ridge penalty and logistic win probability scaling.
+- **Machine-Readable Drivers:** Every prediction decomposes projected point margins into 4 explicit driver factors with signed point magnitudes and evidence details.
+- **Calibrated Confidence:** Win probabilities map monotonically to calibrated confidence scores.
 
 ### 📊 Performance Tracking
-- **Cloud Sync:** Sign in with Google to sync your predictions and records across all your devices (Desktop, Mobile, Tablet).
-- **Season Standings:** Tracks your Win/Loss and ATS (Against The Spread) record vs. the Medi Picks AI week-over-week.
-- **Results Caching:** Automatically caches final scores to build a persistent history of your performance.
-- **CSV Export:** Download your picks and the AI's picks for offline analysis.
+- **Cloud Sync:** Sign in with Google to sync predictions across devices.
+- **Season Standings:** Tracks user and AI performance.
+- **CSV Export:** Export picks and predictions for offline analysis.
 
 ## Technology Stack
 - **Frontend:** React (TypeScript), Tailwind CSS
-- **Data Source:** ESPN Public API (Live Scores, News, Odds)
+- **Decision Engine:** Pure TypeScript Massey Least-Squares Solver (`src/engine/`)
+- **Data Source:** ESPN Public API
 - **Auth & Storage:** Firebase (Google Auth, Firestore)
-- **Persistence:** Hybrid (Cloud Sync + LocalStorage fallback)
-
-## Usage
-1.  **Analyze:** Click any matchup to view the Medi Jinx prediction and intelligence report.
-2.  **Predict:** Enter your own score prediction in the modal.
-3.  **Track:** Watch the live scores on the dashboard and check the "Standings" to see who is winning the season—you or the machine.
-4.  **Sync:** Click the "Sign In" button to save your history to the cloud.
