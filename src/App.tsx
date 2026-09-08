@@ -11,6 +11,61 @@ import { downloadPredictionsAsCSV } from './utils/csvExporter';
 import { CURRENT_SEASON, SEASON_STAGES, SeasonStage } from './data/nfl_data';
 import { Calendar, MapPin, ChevronRight, RefreshCw, Server, Loader2, Download, Trophy, GitBranch, AlertCircle } from 'lucide-react';
 
+export async function backfillUnresolvedResults(
+  predictions: Record<string, UserPrediction>,
+  currentResults: Record<string, any>,
+  fetchSchedule: (week?: number, seasonType?: number) => Promise<{ data: Game[] }> = espnApi.getSchedule
+): Promise<Record<string, any>> {
+  const unresolvedPreds = Object.values(predictions).filter(p => !currentResults[p.gameId]);
+  if (unresolvedPreds.length === 0) return currentResults;
+
+  const weeksToFetch = new Set<number>();
+  let hasUnspecifiedWeeks = false;
+
+  for (const p of unresolvedPreds) {
+    if (p.week) {
+      weeksToFetch.add(p.week);
+    } else {
+      hasUnspecifiedWeeks = true;
+    }
+  }
+
+  if (hasUnspecifiedWeeks) {
+    SEASON_STAGES.forEach(s => weeksToFetch.add(s.week));
+  }
+
+  let nextResults = { ...currentResults };
+  let changed = false;
+
+  for (const week of Array.from(weeksToFetch)) {
+    const stage = SEASON_STAGES.find(s => s.week === week) || { week, seasonType: 2 };
+    try {
+      const resp = await fetchSchedule(stage.week, stage.seasonType);
+      for (const g of resp.data || []) {
+        if (g.status === 'post' && g.homeTeam.score !== undefined && g.awayTeam.score !== undefined) {
+          if (!nextResults[g.id]) {
+            nextResults[g.id] = {
+              homeScore: g.homeTeam.score,
+              awayScore: g.awayTeam.score,
+              spread: g.bettingData?.spread || "",
+              homeAbbr: g.homeTeam.abbreviation,
+              awayAbbr: g.awayTeam.abbreviation,
+              homeName: g.homeTeam.name,
+              awayName: g.awayTeam.name,
+              week: g.week
+            };
+            changed = true;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`Failed to backfill results for week ${week}:`, err);
+    }
+  }
+
+  return changed ? nextResults : currentResults;
+}
+
 const MediPicksApp: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
@@ -35,6 +90,14 @@ const MediPicksApp: React.FC = () => {
       if (authLoading) return;
       const preds = await userService.loadPredictions(user?.uid);
       setUserPredictions(preds);
+
+      // Backfill results for unresolved picks across all weeks using current saved results
+      const saved = localStorage.getItem('mediPicks_results');
+      const current = saved ? JSON.parse(saved) : {};
+      const updatedResults = await backfillUnresolvedResults(preds, current);
+      if (updatedResults !== current) {
+        setGameResults(updatedResults);
+      }
     };
     loadData();
   }, [user, authLoading]);
@@ -85,7 +148,8 @@ const MediPicksApp: React.FC = () => {
               homeAbbr: g.homeTeam.abbreviation,
               awayAbbr: g.awayTeam.abbreviation,
               homeName: g.homeTeam.name,
-              awayName: g.awayTeam.name
+              awayName: g.awayTeam.name,
+              week: g.week
             };
             changed = true;
           }
@@ -107,7 +171,7 @@ const MediPicksApp: React.FC = () => {
 
   const handleDownload = () => {
     if (games.length > 0) {
-      downloadPredictionsAsCSV(games, userPredictions);
+      downloadPredictionsAsCSV(games, userPredictions, gameResults);
     }
   };
 
@@ -269,22 +333,66 @@ const MediPicksApp: React.FC = () => {
                   onClick={() => setSelectedGame(game)}
                   className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-900/20 transition-all duration-300 cursor-pointer group relative"
                 >
-                  {/* Prediction Overlay Badge */}
+                  {/* Prediction Overlay Badge (Requirement 4) */}
                   {prediction && (
                     <div className="absolute top-[44px] right-2 flex flex-col items-end gap-1 z-10">
-                      <div className="bg-green-500/20 border border-green-500/50 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
-                        PICK LOCKED
-                      </div>
+                      {prediction.agreementState === 'agreed' ? (
+                        <div className="bg-emerald-950/80 border border-emerald-600 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
+                          AGREED
+                        </div>
+                      ) : prediction.agreementState === 'deviated' ? (
+                        <div className="bg-amber-950/80 border border-amber-600 text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
+                          DEVIATED
+                        </div>
+                      ) : (
+                        <div className="bg-blue-500/20 border border-blue-500/50 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
+                          PICK LOCKED
+                        </div>
+                      )}
+
                       {game.status === 'post' && (
                         <>
                           {(() => {
-                            const actualWinner = (game.homeTeam.score || 0) > (game.awayTeam.score || 0) ? game.homeTeam.name : game.awayTeam.name;
-                            const hit = actualWinner === prediction.predictedWinner;
-                            return (
-                              <div className={`px-2 py-0.5 rounded border text-[10px] font-bold ${hit ? 'bg-green-900/50 border-green-500 text-green-400' : 'bg-red-900/50 border-red-500 text-red-400'}`}>
-                                {hit ? 'WINNER ✅' : 'WINNER ❌'}
-                              </div>
-                            );
+                            const actualWinner = (game.homeTeam.score || 0) > (game.awayTeam.score || 0) 
+                              ? game.homeTeam.name 
+                              : ((game.awayTeam.score || 0) > (game.homeTeam.score || 0) ? game.awayTeam.name : 'Tie');
+
+                            const userHit = prediction.userPredictedWinner === actualWinner;
+                            const engineHit = prediction.predictedWinner === actualWinner;
+
+                            if (prediction.agreementState === 'deviated') {
+                              if (userHit && !engineHit) {
+                                return (
+                                  <div className="px-2 py-0.5 rounded border text-[10px] font-bold bg-emerald-900/80 border-emerald-500 text-emerald-300 shadow-sm">
+                                    YOU BEAT AI 🏆
+                                  </div>
+                                );
+                              } else if (engineHit && !userHit) {
+                                return (
+                                  <div className="px-2 py-0.5 rounded border text-[10px] font-bold bg-rose-900/80 border-rose-500 text-rose-300 shadow-sm">
+                                    AI BEAT YOU 🤖
+                                  </div>
+                                );
+                              } else if (userHit && engineHit) {
+                                return (
+                                  <div className="px-2 py-0.5 rounded border text-[10px] font-bold bg-blue-900/80 border-blue-500 text-blue-300 shadow-sm">
+                                    BOTH WON 🤝
+                                  </div>
+                                );
+                              } else {
+                                return (
+                                  <div className="px-2 py-0.5 rounded border text-[10px] font-bold bg-slate-800 border-slate-700 text-slate-400 shadow-sm">
+                                    BOTH MISSED ❌
+                                  </div>
+                                );
+                              }
+                            } else {
+                              return (
+                                <div className={`px-2 py-0.5 rounded border text-[10px] font-bold ${engineHit ? 'bg-green-900/50 border-green-500 text-green-400' : 'bg-red-900/50 border-red-500 text-red-400'}`}>
+                                  {engineHit ? 'WINNER ✅' : 'WINNER ❌'}
+                                </div>
+                              );
+                            }
                           })()}
                         </>
                       )}

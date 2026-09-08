@@ -1,6 +1,6 @@
 import { buildNarrative, STRATEGIES, formatPossessive } from '../narrative';
 import { predictGame } from '../predictor';
-import { PredictionInput, HistoricalGame, Citation } from '../types';
+import { PredictionInput, HistoricalGame, Citation, Prediction, NarrativeContext } from '../types';
 import seasonData from '../data/historical-season.json';
 
 const history: HistoricalGame[] = (seasonData.games || []).map((g: any) => ({
@@ -322,5 +322,140 @@ describe('Narrative Composition Engine', () => {
     const n2 = buildNarrative(sample.prediction, sample.context);
 
     expect(n1).toEqual(n2);
+  });
+
+  test('Req 5: backup QB announcement beat renders and names the backup when QB1 is unavailable', () => {
+    const sample = allSeasonGames[0];
+    const narrativeWithBackup = buildNarrative(sample.prediction, {
+      ...sample.context,
+      homeQB: {
+        starterName: 'Carson Wentz',
+        backupName: 'Carson Wentz',
+        isBackupStarting: true,
+        injuredStarterName: 'Patrick Mahomes',
+        injuryStatus: 'Out'
+      }
+    });
+
+    expect(narrativeWithBackup.beats).toContain('qb_backup_home');
+    expect(narrativeWithBackup.text).toContain('Patrick Mahomes');
+    expect(narrativeWithBackup.text).toContain('Carson Wentz');
+    expect(narrativeWithBackup.text).toMatch(/backup quarterback Carson Wentz is projected under center/);
+    expect(narrativeWithBackup.sentences.length).toBeLessThanOrEqual(8);
+
+    const narrativeWithAwayBackup = buildNarrative(sample.prediction, {
+      ...sample.context,
+      awayQB: {
+        starterName: 'Jake Browning',
+        backupName: 'Jake Browning',
+        isBackupStarting: true,
+        injuredStarterName: 'Joe Burrow',
+        injuryStatus: 'Injured Reserve'
+      }
+    });
+
+    expect(narrativeWithAwayBackup.beats).toContain('qb_backup_away');
+    expect(narrativeWithAwayBackup.text).toContain('Joe Burrow');
+    expect(narrativeWithAwayBackup.text).toContain('Jake Browning');
+    expect(narrativeWithAwayBackup.text).toMatch(/backup quarterback Jake Browning is projected under center/);
+    expect(narrativeWithAwayBackup.sentences.length).toBeLessThanOrEqual(8);
+  });
+});
+
+describe('Task 022: narrative text names the structured pick', () => {
+  const context022: NarrativeContext = {
+    homeTeamName: 'Seattle',
+    awayTeamName: 'Denver',
+    homeAbbr: 'SEA',
+    awayAbbr: 'DEN',
+    isNeutralSite: false,
+    week: 1
+  };
+
+  test('R1: driver sentences reference drivers in descending |magnitude| order regardless of input order', () => {
+    const prediction: Prediction = {
+      winner: 'SEA',
+      homeScore: 27,
+      awayScore: 20,
+      margin: 7,
+      projectedMargin: 7,
+      homeWinProbability: 0.68,
+      confidence: 60,
+      spreadPick: { team: 'BAD', line: -3, edge: 0.5 },
+      totalPick: { side: 'over', line: 44.5, projected: 45.5, edge: 0.5 },
+      marketSpread: -3,
+      modelVersion: 'task-022',
+      drivers: [
+        { key: 'custom_gamma', label: 'Gamma factor', magnitude: 2.0, direction: 'home', detail: '' },
+        { key: 'custom_beta', label: 'Beta factor', magnitude: 3.0, direction: 'home', detail: '' },
+        { key: 'custom_alpha', label: 'Alpha factor', magnitude: 4.0, direction: 'home', detail: '' }
+      ]
+    };
+
+    const narrative = buildNarrative(prediction, context022);
+
+    const driverOrder = narrative.sentences
+      .filter(s => /(Alpha|Beta|Gamma) factor/.test(s))
+      .map(s => (s.includes('Alpha factor') ? 'alpha' : s.includes('Beta factor') ? 'beta' : 'gamma'));
+
+    expect(driverOrder).toEqual(['alpha', 'beta', 'gamma']);
+    expect(narrative.sentences[2]).toContain('Alpha factor');
+  });
+
+  test('R2: ATS sentence names the spreadPick.team (away team), not the home team / projected winner', () => {
+    const prediction: Prediction = {
+      winner: 'SEA',
+      homeScore: 24,
+      awayScore: 21,
+      margin: 3,
+      projectedMargin: 3,
+      homeWinProbability: 0.6,
+      confidence: 60,
+      spreadPick: { team: 'DEN', line: 3, edge: 2.0 },
+      totalPick: { side: 'over', line: 44.5, projected: 45.5, edge: 0.5 },
+      marketSpread: 3,
+      modelVersion: 'task-022',
+      drivers: []
+    };
+
+    const narrative = buildNarrative(prediction, context022);
+    const atsSentence = narrative.sentences.find(s => s.startsWith('Against the spread'));
+
+    expect(atsSentence).toBeDefined();
+    expect(atsSentence as string).toBe('Against the spread in Seattle vs Denver, the model favors DEN at +3.0 with an edge of 2.0 points.');
+    expect(atsSentence as string).not.toContain('favors Seattle');
+  });
+
+  test('R3: total sentence matches totalPick.side for both under and over', () => {
+    const base: Prediction = {
+      winner: 'SEA',
+      homeScore: 24,
+      awayScore: 20,
+      margin: 4,
+      projectedMargin: 4,
+      homeWinProbability: 0.6,
+      confidence: 60,
+      spreadPick: { team: 'DEN', line: 3, edge: 0.5 },
+      totalPick: { side: 'under', line: 44.5, projected: 42.0, edge: 0 },
+      marketSpread: 3,
+      modelVersion: 'task-022',
+      drivers: []
+    };
+
+    const under = buildNarrative(
+      { ...base, totalPick: { side: 'under', line: 44.5, projected: 42.0, edge: 2.0 } },
+      context022
+    );
+    const underSentence = under.sentences.find(s => s.startsWith('For the game total'));
+    expect(underSentence as string).toBe('For the game total, the model recommends UNDER 44.5 based on a projected total of 42.0 points in Seattle vs Denver.');
+    expect(underSentence as string).not.toContain(' OVER ');
+
+    const over = buildNarrative(
+      { ...base, totalPick: { side: 'over', line: 48.0, projected: 50.0, edge: 2.0 } },
+      context022
+    );
+    const overSentence = over.sentences.find(s => s.startsWith('For the game total'));
+    expect(overSentence as string).toBe('For the game total, the model recommends OVER 48.0 based on a projected total of 50.0 points in Seattle vs Denver.');
+    expect(overSentence as string).not.toContain(' UNDER ');
   });
 });

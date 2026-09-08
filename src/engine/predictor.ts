@@ -1,4 +1,4 @@
-import { Driver, Prediction, PredictionInput, SpreadPick, TotalPick } from './types';
+import { Driver, PlayerInjury, Prediction, PredictionInput, SpreadPick, TotalPick } from './types';
 
 const MODEL_VERSION = 'massey-v1.0.0';
 const DEFAULT_HFA = 2.0;
@@ -36,6 +36,118 @@ function solveLinearSystem(M: number[][], p: number[]): number[] {
   }
 
   return A.map(row => row[n]);
+}
+
+// Status multiplier: Out/IR/Suspension 1.0, Doubtful 0.75, Questionable 0.35, Active 0.0
+export function getStatusMultiplier(statusStr?: string): number {
+  const status = (statusStr || '').toLowerCase().trim();
+  if (status === 'out' || status === 'injured reserve' || status === 'ir' || status === 'suspension') {
+    return 1.0;
+  }
+  if (status === 'doubtful') {
+    return 0.75;
+  }
+  if (status === 'questionable') {
+    return 0.35;
+  }
+  if (status === 'active') {
+    return 0.0;
+  }
+  return 0.0;
+}
+
+// Position & depth chart base weights (in points of margin when player is Out)
+export function getPositionBaseWeight(positionStr?: string, depthChartRank?: number, group?: string, isDisplacedStarter?: boolean): number {
+  if (group === 'practiceSquad') {
+    return 0.0;
+  }
+
+  const pos = (positionStr || '').toUpperCase().trim();
+  // A displaced starter (was rank 1 before ESPN auto-promoted his replacement)
+  // is weighted by the role he would occupy if healthy.
+  const isStarter = depthChartRank === 1 || isDisplacedStarter === true;
+
+  if (isStarter) {
+    switch (pos) {
+      case 'QB':
+        return 5.5;
+      case 'WR':
+        return 1.4;
+      case 'DE':
+      case 'EDGE':
+        return 1.3;
+      case 'LT':
+      case 'OT':
+      case 'T':
+        return 1.2;
+      case 'RB':
+      case 'CB':
+        return 1.0;
+      default:
+        // other starter (e.g. TE, C, G, DT, DL, LB, S, PK, P, FB, LS)
+        return 0.6;
+    }
+  } else {
+    // Backup player
+    switch (pos) {
+      case 'QB':
+        return 0.5;
+      case 'WR':
+      case 'RB':
+      case 'LT':
+      case 'OT':
+      case 'T':
+      case 'DE':
+      case 'EDGE':
+      case 'CB':
+        return 0.2;
+      default:
+        // other backup
+        return 0.1;
+    }
+  }
+}
+
+export function calculatePlayerInjuryPenalty(injury: PlayerInjury): number {
+  const multiplier = getStatusMultiplier(injury.status);
+  if (multiplier === 0.0) return 0.0;
+  const baseWeight = getPositionBaseWeight(injury.position, injury.depthChartRank, injury.group, injury.isDisplacedStarter);
+  return baseWeight * multiplier;
+}
+
+// Cap team injury penalty at 10.0 points to prevent extreme cumulative blowouts
+// while allowing full expression of QB (5.5) + multiple key starters (WR1/LT/EDGE/CB1 up to ~4.5 pts).
+export const MAX_TEAM_INJURY_PENALTY = 10.0;
+
+export interface TeamInjuryEvaluation {
+  penalty: number;
+  unclippedPenalty: number;
+  playerPenalties: Array<{ player: PlayerInjury; penalty: number }>;
+}
+
+export function calculateTeamInjuryPenalty(injuries: PlayerInjury[] = []): TeamInjuryEvaluation {
+  let sum = 0;
+  const playerPenalties: Array<{ player: PlayerInjury; penalty: number }> = [];
+
+  for (const inj of injuries) {
+    const penalty = calculatePlayerInjuryPenalty(inj);
+    if (penalty > 0) {
+      playerPenalties.push({ player: inj, penalty });
+      sum += penalty;
+    }
+  }
+
+  playerPenalties.sort((a, b) => b.penalty - a.penalty);
+  const penalty = Math.min(MAX_TEAM_INJURY_PENALTY, sum);
+  return { penalty, unclippedPenalty: sum, playerPenalties };
+}
+
+function formatTeamAbsenceDetails(teamAbbr: string, list: Array<{ player: PlayerInjury; penalty: number }>): string {
+  if (list.length === 0) return '';
+  const top = list.slice(0, 3).map(x => `${x.player.name} (${x.player.position}, ${x.player.status}: -${x.penalty.toFixed(2)} pts)`);
+  const remaining = list.length - top.length;
+  const extra = remaining > 0 ? ` (+${remaining} more)` : '';
+  return `${teamAbbr} [${top.join(', ')}${extra}]`;
 }
 
 export function predictGame(input: PredictionInput): Prediction {
@@ -114,9 +226,11 @@ export function predictGame(input: PredictionInput): Prediction {
   const rHome = ratings[game.homeAbbr] ?? 0;
   const rAway = ratings[game.awayAbbr] ?? 0;
 
-  // Injury & Roster Modifiers (1.0 pt per key injury, capped at 3.0 pts)
-  const homePenalty = Math.min(3.0, homeInjuries.length * 1.0);
-  const awayPenalty = Math.min(3.0, awayInjuries.length * 1.0);
+  // Injury & Roster Availability Modifiers
+  const homeResult = calculateTeamInjuryPenalty(homeInjuries);
+  const awayResult = calculateTeamInjuryPenalty(awayInjuries);
+  const homePenalty = homeResult.penalty;
+  const awayPenalty = awayResult.penalty;
   const injuryAdj = awayPenalty - homePenalty; // Positive if away injured, negative if home injured
 
   // Pre-rounding projected margin (reconciles 100% with sum of drivers)
@@ -125,6 +239,15 @@ export function predictGame(input: PredictionInput): Prediction {
   // Build Machine-Readable Drivers (Requirement 6: omit drivers with magnitude 0.00)
   const homeGameCount = gameCounts[game.homeAbbr] || 0;
   const awayGameCount = gameCounts[game.awayAbbr] || 0;
+
+  let injuryDetail = `Roster availability and injury adjustment contributes ${injuryAdj >= 0 ? '+' : ''}${injuryAdj.toFixed(2)} net points.`;
+  if (homeResult.playerPenalties.length > 0 && awayResult.playerPenalties.length > 0) {
+    injuryDetail = `${formatTeamAbsenceDetails(game.homeAbbr, homeResult.playerPenalties)}; ${formatTeamAbsenceDetails(game.awayAbbr, awayResult.playerPenalties)}. Net availability impact: ${injuryAdj >= 0 ? '+' : ''}${injuryAdj.toFixed(2)} pts to ${game.homeAbbr}.`;
+  } else if (homeResult.playerPenalties.length > 0) {
+    injuryDetail = `${formatTeamAbsenceDetails(game.homeAbbr, homeResult.playerPenalties)}. Reduces ${game.homeAbbr} margin by ${homePenalty.toFixed(2)} pts.`;
+  } else if (awayResult.playerPenalties.length > 0) {
+    injuryDetail = `${formatTeamAbsenceDetails(game.awayAbbr, awayResult.playerPenalties)}. Shifts margin +${awayPenalty.toFixed(2)} pts toward ${game.homeAbbr}.`;
+  }
 
   const rawDrivers: Driver[] = [
     {
@@ -153,7 +276,7 @@ export function predictGame(input: PredictionInput): Prediction {
       label: 'Roster Availability Modifier',
       magnitude: Math.abs(injuryAdj),
       direction: injuryAdj > 0 ? 'home' : (injuryAdj < 0 ? 'away' : 'neutral'),
-      detail: `Roster availability and injury adjustment contributes ${injuryAdj >= 0 ? '+' : ''}${injuryAdj.toFixed(2)} net points.`
+      detail: injuryDetail
     }
   ];
 

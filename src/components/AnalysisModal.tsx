@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trophy, AlertTriangle, Activity, User, BrainCircuit, Flame, Zap, RefreshCw, DollarSign, History, Target } from 'lucide-react';
-import { Game, AnalysisResult, UserPrediction, Team } from '../types';
+import { X, Trophy, AlertTriangle, Activity, User, BrainCircuit, Flame, Zap, RefreshCw, DollarSign, History, Target, CheckCircle, Bot } from 'lucide-react';
+import { Game, AnalysisResult, UserPrediction, Team, AgreementState } from '../types';
 import { analyzeMatchup } from '../services/geminiService';
 
 interface AnalysisModalProps {
@@ -28,10 +28,11 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   
-  // Custom User Inputs
+  // Custom User Inputs (empty by default unless already saved, D1 fix)
   const [customHomeScore, setCustomHomeScore] = useState(userPrediction?.userHomeScore || "");
   const [customAwayScore, setCustomAwayScore] = useState(userPrediction?.userAwayScore || "");
   const [customWinner, setCustomWinner] = useState(userPrediction?.userPredictedWinner || "");
+  const [agreementState, setAgreementState] = useState<AgreementState>(userPrediction?.agreementState || 'unset');
 
   // Auto-analyze on mount
   useEffect(() => {
@@ -42,11 +43,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
         const result = await analyzeMatchup(game);
         if (isMounted) {
           setAnalysis(result);
-          if (!userPrediction) {
-            setCustomHomeScore(result.homeScorePrediction.toString());
-            setCustomAwayScore(result.awayScorePrediction.toString());
-            setCustomWinner(result.winnerPrediction);
-          }
+          // Do NOT pre-fill user inputs with engine's numbers (Requirement 1 / D1)
         }
       } catch (err) {
         console.error(err);
@@ -56,7 +53,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
     };
     runAnalysis();
     return () => { isMounted = false; };
-  }, [game, userPrediction]);
+  }, [game]);
 
   const handleRefresh = async () => {
     setLoading(true);
@@ -71,8 +68,47 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
     }
   };
 
-  const handlePredict = () => {
+  // Explicit Action: Take the engine's pick (Requirement 1 / D2)
+  const handleTakeEnginePick = () => {
     if (!analysis) return;
+    const homeStr = analysis.homeScorePrediction.toString();
+    const awayStr = analysis.awayScorePrediction.toString();
+    const winnerStr = analysis.winnerPrediction;
+
+    setCustomHomeScore(homeStr);
+    setCustomAwayScore(awayStr);
+    setCustomWinner(winnerStr);
+    setAgreementState('agreed');
+
+    onSavePrediction({
+      gameId: game.id,
+      homeScore: homeStr,
+      awayScore: awayStr,
+      predictedWinner: winnerStr,
+      userHomeScore: homeStr,
+      userAwayScore: awayStr,
+      userPredictedWinner: winnerStr,
+      agreementState: 'agreed',
+      week: game.week,
+      seasonType: game.seasonType
+    });
+  };
+
+  // Explicit Action: Save custom deviated prediction
+  const handleSaveCustomPick = () => {
+    if (!analysis) return;
+    if (!customHomeScore || !customAwayScore) return;
+
+    let winner = customWinner;
+    if (!winner) {
+      const h = parseFloat(customHomeScore);
+      const a = parseFloat(customAwayScore);
+      winner = h >= a ? game.homeTeam.name : game.awayTeam.name;
+      setCustomWinner(winner);
+    }
+
+    setAgreementState('deviated');
+
     onSavePrediction({
       gameId: game.id,
       homeScore: analysis.homeScorePrediction.toString(),
@@ -80,7 +116,10 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
       predictedWinner: analysis.winnerPrediction,
       userHomeScore: customHomeScore,
       userAwayScore: customAwayScore,
-      userPredictedWinner: customWinner
+      userPredictedWinner: winner,
+      agreementState: 'deviated',
+      week: game.week,
+      seasonType: game.seasonType
     });
   };
 
@@ -142,13 +181,13 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
           {/* Left Column: Predictions & User Input */}
           <div className="space-y-6">
             
-            {/* Predicted Score Card */}
+            {/* Predicted Score Card & Competition Section */}
             {analysis ? (
-              <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-700 shadow-inner text-center">
-                <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4 flex items-center justify-center gap-2">
+              <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-700 shadow-inner text-center space-y-4">
+                <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest flex items-center justify-center gap-2">
                   <Activity className="w-4 h-4" /> Projected Final Score
                 </h3>
-                <div className="flex items-center justify-center gap-6 mb-6">
+                <div className="flex items-center justify-center gap-6 pb-2">
                   <div>
                     <div className="text-4xl font-black text-white">{analysis.awayScorePrediction}</div>
                     <div className="text-[10px] text-slate-500 uppercase">{game.awayTeam.abbreviation}</div>
@@ -160,49 +199,140 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                   </div>
                 </div>
 
-                {/* User Input Section */}
-                <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center justify-center gap-2">
-                    <User className="w-3 h-3" /> Your Prediction
+                {/* Completed Game Matchup Verdict (Requirement 4) */}
+                {game.status === 'post' && game.homeTeam.score !== undefined && game.awayTeam.score !== undefined && (
+                  <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 text-left">
+                    <div className="text-[10px] uppercase font-mono tracking-widest text-slate-400 mb-1">Final Result</div>
+                    <div className="text-sm font-bold text-white mb-2">
+                      {game.awayTeam.abbreviation} {game.awayTeam.score} - {game.homeTeam.score} {game.homeTeam.abbreviation}
+                    </div>
+                    {userPrediction ? (() => {
+                      const actualWinner = game.homeTeam.score > game.awayTeam.score ? game.homeTeam.name : (game.awayTeam.score > game.homeTeam.score ? game.awayTeam.name : 'Tie');
+                      const userWon = userPrediction.userPredictedWinner === actualWinner;
+                      const engineWon = userPrediction.predictedWinner === actualWinner;
+
+                      if (userPrediction.agreementState === 'deviated') {
+                        let verdictText = 'BOTH TIED';
+                        let badgeColor = 'bg-slate-800 text-slate-300 border-slate-700';
+
+                        if (userWon && !engineWon) {
+                          verdictText = 'YOU BEAT THE AI! 🏆';
+                          badgeColor = 'bg-emerald-900/60 border-emerald-500 text-emerald-300';
+                        } else if (engineWon && !userWon) {
+                          verdictText = 'AI BEAT YOU 🤖';
+                          badgeColor = 'bg-rose-900/60 border-rose-500 text-rose-300';
+                        } else if (userWon && engineWon) {
+                          verdictText = 'BOTH WON 🤝';
+                          badgeColor = 'bg-blue-900/60 border-blue-500 text-blue-300';
+                        } else {
+                          verdictText = 'BOTH MISSED ❌';
+                          badgeColor = 'bg-slate-800 border-slate-700 text-slate-400';
+                        }
+
+                        return (
+                          <div className={`p-2 rounded border text-xs font-bold ${badgeColor} text-center`}>
+                            {verdictText}
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className={`p-2 rounded border text-xs font-bold text-center ${engineWon ? 'bg-emerald-900/50 border-emerald-600 text-emerald-300' : 'bg-rose-900/50 border-rose-600 text-rose-300'}`}>
+                            {engineWon ? 'AGREED PICK WON ✅' : 'AGREED PICK MISSED ❌'}
+                          </div>
+                        );
+                      }
+                    })() : (
+                      <div className="text-[10px] text-slate-500 italic">No pick recorded for this game.</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Current Pick Status */}
+                <div className="flex items-center justify-between px-1 py-1 text-xs">
+                  <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Pick Status</span>
+                  {agreementState === 'agreed' ? (
+                    <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-600 text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> Agreed with Engine
+                    </span>
+                  ) : agreementState === 'deviated' ? (
+                    <span className="px-2 py-0.5 rounded bg-amber-950 border border-amber-600 text-amber-400 text-[10px] font-bold flex items-center gap-1">
+                      <User className="w-3 h-3" /> Deviated from Engine
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 text-[10px] font-bold">
+                      Unset
+                    </span>
+                  )}
+                </div>
+
+                {/* One-Click Action: Take Engine Pick (Requirements 1 & 9 / D2) */}
+                <button
+                  type="button"
+                  onClick={handleTakeEnginePick}
+                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-all shadow-md shadow-emerald-900/30 active:scale-95 text-xs uppercase tracking-wide flex items-center justify-center gap-2"
+                >
+                  <Bot className="w-4 h-4" /> Take the Engine's Pick ({analysis.awayScorePrediction}-{analysis.homeScorePrediction})
+                </button>
+
+                {/* Deviate / Custom Score Section */}
+                <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800 text-left">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1">
+                    <User className="w-3 h-3 text-blue-400" /> Override Engine (Deviate)
                   </h4>
                   <div className="flex items-center justify-center gap-2 mb-3">
-                    <div className="flex flex-col w-16">
+                    <div className="flex flex-col w-20">
                       <label className="text-[8px] text-slate-500 uppercase mb-1">{game.awayTeam.abbreviation}</label>
                       <input 
                         type="number" 
+                        placeholder={analysis.awayScorePrediction.toString()}
                         value={customAwayScore}
-                        onChange={(e) => setCustomAwayScore(e.target.value)}
-                        className="bg-slate-900 border border-slate-700 rounded text-center text-white font-mono p-1 focus:border-blue-500 outline-none"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomAwayScore(val);
+                          if (val && customHomeScore && !customWinner) {
+                            setCustomWinner(parseFloat(customHomeScore) >= parseFloat(val) ? game.homeTeam.name : game.awayTeam.name);
+                          }
+                        }}
+                        className="bg-slate-900 border border-slate-700 rounded text-center text-white font-mono p-1 focus:border-blue-500 outline-none text-sm"
                       />
                     </div>
-                    <span className="text-slate-600">-</span>
-                    <div className="flex flex-col w-16">
+                    <span className="text-slate-600 font-bold">-</span>
+                    <div className="flex flex-col w-20">
                       <label className="text-[8px] text-slate-500 uppercase mb-1">{game.homeTeam.abbreviation}</label>
                       <input 
                         type="number" 
+                        placeholder={analysis.homeScorePrediction.toString()}
                         value={customHomeScore}
-                        onChange={(e) => setCustomHomeScore(e.target.value)}
-                        className="bg-slate-900 border border-slate-700 rounded text-center text-white font-mono p-1 focus:border-blue-500 outline-none"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomHomeScore(val);
+                          if (val && customAwayScore && !customWinner) {
+                            setCustomWinner(parseFloat(val) >= parseFloat(customAwayScore) ? game.homeTeam.name : game.awayTeam.name);
+                          }
+                        }}
+                        className="bg-slate-900 border border-slate-700 rounded text-center text-white font-mono p-1 focus:border-blue-500 outline-none text-sm"
                       />
                     </div>
                   </div>
                   <select 
                     value={customWinner}
                     onChange={(e) => setCustomWinner(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white outline-none focus:border-blue-500"
+                    className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white outline-none focus:border-blue-500 mb-3"
                   >
-                    <option value="">Select Winner</option>
+                    <option value="">Select Predicted Winner</option>
                     <option value={game.awayTeam.name}>{game.awayTeam.name}</option>
                     <option value={game.homeTeam.name}>{game.homeTeam.name}</option>
                   </select>
-                </div>
 
-                <button 
-                  onClick={handlePredict}
-                  className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition-all shadow-lg shadow-blue-900/20 active:scale-95 text-xs uppercase tracking-wide"
-                >
-                  Save Prediction
-                </button>
+                  <button 
+                    type="button"
+                    onClick={handleSaveCustomPick}
+                    disabled={!customHomeScore || !customAwayScore}
+                    className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-lg transition-all shadow-md shadow-blue-900/20 active:scale-95 text-xs uppercase tracking-wide flex items-center justify-center gap-1.5"
+                  >
+                    <User className="w-3.5 h-3.5" /> Save Custom Pick (Deviate)
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="bg-slate-900/50 p-6 rounded-xl border border-slate-700 h-48 animate-pulse"></div>

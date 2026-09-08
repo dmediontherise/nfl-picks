@@ -103,6 +103,8 @@ export interface AnalysisResult {
   sources: Source[];
 }
 
+export type AgreementState = 'unset' | 'agreed' | 'deviated';
+
 export interface UserPrediction {
   gameId: string;
   homeScore: string;
@@ -112,4 +114,7 @@ export interface UserPrediction {
   userHomeScore?: string;
   userAwayScore?: string;
   userPredictedWinner?: string;
+  agreementState?: AgreementState;
+  week?: number;
+  seasonType?: number;
 }
