@@ -2,24 +2,168 @@ import { Game, AnalysisResult, Team } from '../types';
 import { TEAMS } from '../data/nfl_data';
 import { generateTeamNews } from './newsFactory';
 import { espnApi, NewsArticle } from './espnAdapter';
-import { predictGame, buildNarrative, PredictionInput, HistoricalGame, Narrative } from '../engine';
+import { predictGame, buildNarrative, PredictionInput, HistoricalGame, Narrative, PlayerInjury, NarrativeQBContext } from '../engine';
 import seasonData from '../engine/data/historical-season.json';
 import { calculateExplosiveRating, calculateExecutionRating, calculateQBLeverage, calculateUnitLeverage } from './displayMetrics';
+import { loadRosterSnapshot, RosterSnapshot, RosterPlayer, detectDisplacedStarters } from '../data/rosterSnapshot';
 
 const getTeamData = (team: Team) => {
   const staticData = TEAMS[team.abbreviation] || { tier: 3, offRating: 75, defRating: 75, status: "Bubble", keyInjuries: [] };
-  const merged = { ...staticData, ...team };
-  
-  if (staticData.starterQB) {
-    if (!merged.qbStats) {
-      merged.qbStats = { name: staticData.starterQB, passingYds: 0, passingTds: 0, interceptions: 0 };
-    } else {
-      merged.qbStats.name = staticData.starterQB;
+  return { ...staticData, ...team };
+};
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function getSafeRosterSnapshot(customSnapshot?: any): RosterSnapshot | null {
+  try {
+    if (customSnapshot === null) return null;
+    const snapshot = customSnapshot !== undefined ? loadRosterSnapshot(customSnapshot) : loadRosterSnapshot();
+    if (!snapshot || !snapshot.fetchedAt) return null;
+
+    const fetchedTime = new Date(snapshot.fetchedAt).getTime();
+    if (isNaN(fetchedTime)) return null;
+
+    const ageMs = Date.now() - fetchedTime;
+    if (ageMs > SEVEN_DAYS_MS) {
+      console.warn('Roster snapshot is older than 7 days. Treating as absent per degradation contract.');
+      return null;
+    }
+    return snapshot;
+  } catch (err) {
+    console.warn('Roster snapshot load or validation failed. Degrading safely to zero availability adjustments:', err);
+    return null;
+  }
+}
+
+export function resolveTeamQB(
+  teamAbbr: string,
+  snapshot: RosterSnapshot | null,
+  fallbackQBName?: string
+): NarrativeQBContext {
+  if (!snapshot || !snapshot.teams || !snapshot.teams[teamAbbr]) {
+    return {
+      starterName: fallbackQBName || 'Starting Quarterback',
+      isBackupStarting: false,
+    };
+  }
+
+  const team = snapshot.teams[teamAbbr];
+  const removedNames = new Set(
+    (snapshot.transactions || [])
+      .filter(tx => 
+        (tx.type === 'removed' && (tx.team === teamAbbr || tx.fromTeam === teamAbbr)) ||
+        (tx.type === 'moved' && tx.fromTeam === teamAbbr && tx.toTeam !== teamAbbr)
+      )
+      .map(tx => tx.playerName)
+  );
+
+  const movedToTeamQBs: RosterPlayer[] = [];
+  const movedToTxs = (snapshot.transactions || []).filter(
+    tx => tx.type === 'moved' && tx.toTeam === teamAbbr && tx.fromTeam !== teamAbbr
+  );
+  for (const tx of movedToTxs) {
+    if (team.roster.some(p => p.name === tx.playerName)) continue;
+    if (tx.fromTeam && snapshot.teams[tx.fromTeam]) {
+      const orig = snapshot.teams[tx.fromTeam].roster.find(p => p.name === tx.playerName);
+      if (orig && (orig.position.toUpperCase() === 'QB' || tx.position?.toUpperCase() === 'QB')) {
+        movedToTeamQBs.push(orig);
+      }
     }
   }
-  
-  return merged;
-};
+
+  const qbs = [
+    ...team.roster.filter(p => p.position.toUpperCase() === 'QB' && !removedNames.has(p.name)),
+    ...movedToTeamQBs
+  ];
+  qbs.sort((a, b) => (a.depthChartRank ?? a.rank ?? 99) - (b.depthChartRank ?? b.rank ?? 99));
+
+  if (qbs.length === 0) {
+    return {
+      starterName: fallbackQBName || 'Starting Quarterback',
+      isBackupStarting: false,
+    };
+  }
+
+  const qb1 = qbs[0];
+  const isUnavailable = (status?: string) => {
+    if (!status) return false;
+    const s = status.toLowerCase();
+    return s === 'out' || s === 'injured reserve' || s === 'ir' || s === 'suspension';
+  };
+
+  if (isUnavailable(qb1.status)) {
+    // QB1 is unavailable (Out/IR/Suspension). Project with QB2 and announce by name
+    const qb2 = qbs.find((q, idx) => idx > 0 && !isUnavailable(q.status)) || qbs[1];
+    return {
+      starterName: qb2 ? qb2.name : qb1.name,
+      backupName: qb2 ? qb2.name : undefined,
+      isBackupStarting: true,
+      injuredStarterName: qb1.name,
+      injuryStatus: qb1.status,
+    };
+  }
+
+  const qb2 = qbs.find((_, idx) => idx > 0);
+  return {
+    starterName: qb1.name,
+    backupName: qb2?.name,
+    isBackupStarting: false,
+  };
+}
+
+export function getTeamInjuriesForEngine(snapshot: RosterSnapshot | null | undefined, teamAbbr: string): PlayerInjury[] {
+  if (!snapshot || !snapshot.teams) return [];
+  const team = snapshot.teams[teamAbbr];
+  if (!team || !Array.isArray(team.roster)) return [];
+
+  // Exclude players removed or traded away from this team (Requirement 6)
+  const removedNames = new Set(
+    (snapshot.transactions || [])
+      .filter(tx => 
+        (tx.type === 'removed' && (tx.team === teamAbbr || tx.fromTeam === teamAbbr)) ||
+        (tx.type === 'moved' && tx.fromTeam === teamAbbr && tx.toTeam !== teamAbbr)
+      )
+      .map(tx => tx.playerName)
+  );
+
+  const displacedStarters = detectDisplacedStarters(team);
+
+  const injuries: PlayerInjury[] = team.roster
+    .filter(p => !!p.status && !removedNames.has(p.name))
+    .map(p => ({
+      name: p.name,
+      position: p.position,
+      status: p.status!,
+      depthChartRank: p.depthChartRank ?? p.rank,
+      group: p.group,
+      shortComment: p.shortComment,
+      previousRank: p.previousRank,
+      isDisplacedStarter: displacedStarters.has(p.name),
+    }));
+
+  // Include players moved TO this team (Requirement 6)
+  const movedToTxs = (snapshot.transactions || []).filter(
+    tx => tx.type === 'moved' && tx.toTeam === teamAbbr && tx.fromTeam !== teamAbbr
+  );
+  for (const tx of movedToTxs) {
+    if (team.roster.some(p => p.name === tx.playerName)) continue;
+    if (tx.fromTeam && snapshot.teams[tx.fromTeam]) {
+      const orig = snapshot.teams[tx.fromTeam].roster.find(p => p.name === tx.playerName);
+      if (orig && orig.status) {
+        injuries.push({
+          name: orig.name,
+          position: tx.position || orig.position,
+          status: orig.status,
+          depthChartRank: orig.depthChartRank ?? orig.rank,
+          group: tx.toGroup || orig.group,
+          shortComment: orig.shortComment,
+        });
+      }
+    }
+  }
+
+  return injuries;
+}
 
 // Pure history builder function filtering games kicking off strictly before kickoffISO
 export function buildPredictionHistory(seasonGames: any[], kickoffISO?: string): HistoricalGame[] {
@@ -41,7 +185,7 @@ export function buildPredictionHistory(seasonGames: any[], kickoffISO?: string):
 // Cache for analysis results to respect the 15-minute rule
 const analysisCache: Record<string, { result: AnalysisResult, timestamp: number }> = {};
 
-export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false): Promise<AnalysisResult> => {
+export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false, customSnapshot?: any): Promise<AnalysisResult> => {
   const cacheKey = game.id;
   const now = Date.now();
   const CACHE_DURATION = 15 * 60 * 1000; // 15 Minutes
@@ -56,6 +200,30 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
 
   let home = { ...getTeamData(game.homeTeam) };
   let away = { ...getTeamData(game.awayTeam) };
+
+  // Resolve roster snapshot, team QBs, and injury rosters
+  const snapshot = getSafeRosterSnapshot(customSnapshot);
+  const homeQBInfo = resolveTeamQB(home.abbreviation, snapshot, home.qbStats?.name);
+  const awayQBInfo = resolveTeamQB(away.abbreviation, snapshot, away.qbStats?.name);
+
+  if (homeQBInfo.starterName) {
+    if (!home.qbStats) {
+      home.qbStats = { name: homeQBInfo.starterName, passingYds: 0, passingTds: 0, interceptions: 0 };
+    } else {
+      home.qbStats.name = homeQBInfo.starterName;
+    }
+  }
+
+  if (awayQBInfo.starterName) {
+    if (!away.qbStats) {
+      away.qbStats = { name: awayQBInfo.starterName, passingYds: 0, passingTds: 0, interceptions: 0 };
+    } else {
+      away.qbStats.name = awayQBInfo.starterName;
+    }
+  }
+
+  const homeInjuries: PlayerInjury[] = snapshot ? getTeamInjuriesForEngine(snapshot, home.abbreviation) : [];
+  const awayInjuries: PlayerInjury[] = snapshot ? getTeamInjuriesForEngine(snapshot, away.abbreviation) : [];
 
   // Fetch real-time game news
   let homeNewsSnippet = "";
@@ -113,8 +281,8 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
       }
     },
     history,
-    homeInjuries: home.keyInjuries || [],
-    awayInjuries: away.keyInjuries || []
+    homeInjuries,
+    awayInjuries
   };
 
   // Call the pure engine predictor module
@@ -148,7 +316,9 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false):
     homeAbbr: home.abbreviation,
     awayAbbr: away.abbreviation,
     isNeutralSite: Boolean(game.isNeutralSite),
-    week: game.week
+    week: game.week,
+    homeQB: homeQBInfo,
+    awayQB: awayQBInfo
   });
   const narrative = narrativeObj.text;
 

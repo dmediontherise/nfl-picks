@@ -278,6 +278,29 @@ export function buildNarrative(prediction: Prediction, context: NarrativeContext
     currentSentenceIndex++;
   }
 
+  // Beat: Backup QB starter announcement when QB1 is unavailable (Requirement 5)
+  if (context.homeQB?.isBackupStarting && context.homeQB.injuredStarterName && context.homeQB.starterName) {
+    if (sentences.length < 8) {
+      beats.push('qb_backup_home');
+      const statusText = context.homeQB.injuryStatus ? ` (${context.homeQB.injuryStatus})` : '';
+      sentences.push(
+        `With ${context.homeQB.injuredStarterName} sidelined${statusText}, backup quarterback ${context.homeQB.starterName} is projected under center for ${homeName}.`
+      );
+      currentSentenceIndex++;
+    }
+  }
+
+  if (context.awayQB?.isBackupStarting && context.awayQB.injuredStarterName && context.awayQB.starterName) {
+    if (sentences.length < 8) {
+      beats.push('qb_backup_away');
+      const statusText = context.awayQB.injuryStatus ? ` (${context.awayQB.injuryStatus})` : '';
+      sentences.push(
+        `With ${context.awayQB.injuredStarterName} sidelined${statusText}, backup quarterback ${context.awayQB.starterName} is projected under center for ${awayName}.`
+      );
+      currentSentenceIndex++;
+    }
+  }
+
   // Market Disagreement Beat vs Standard ATS Pick
   const spreadEdge = prediction.spreadPick.edge;
   const spreadLine = prediction.spreadPick.line;

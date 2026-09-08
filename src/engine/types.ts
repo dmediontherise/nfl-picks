@@ -45,6 +45,17 @@ export interface HistoricalGame {
   week?: number;
 }
 
+export interface PlayerInjury {
+  name: string;
+  position: string;
+  status: string;
+  depthChartRank?: number;
+  group?: string;
+  shortComment?: string;
+  previousRank?: number;
+  isDisplacedStarter?: boolean;
+}
+
 export interface PredictionInput {
   game: {
     id?: string;
@@ -59,8 +70,16 @@ export interface PredictionInput {
     } | null;
   };
   history: HistoricalGame[];
-  homeInjuries?: string[];
-  awayInjuries?: string[];
+  homeInjuries?: PlayerInjury[];
+  awayInjuries?: PlayerInjury[];
+}
+
+export interface NarrativeQBContext {
+  starterName: string;
+  backupName?: string;
+  isBackupStarting?: boolean;
+  injuredStarterName?: string;
+  injuryStatus?: string;
 }
 
 export interface NarrativeContext {
@@ -72,6 +91,8 @@ export interface NarrativeContext {
   awayTeamNick?: string;
   isNeutralSite?: boolean;
   week?: number;
+  homeQB?: NarrativeQBContext;
+  awayQB?: NarrativeQBContext;
 }
 
 export interface Citation {

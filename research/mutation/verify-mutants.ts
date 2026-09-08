@@ -19,9 +19,23 @@ const MUTATIONS: Mutation[] = [
     replacement: "if (coverMargin < 0) actualCover = 'home';"
   },
   {
+    id: 'engine-ats-cover-inverted',
+    name: 'ATS cover comparison inverted (> <) in backtest-engine.ts',
+    targetFile: 'research/backtest-engine.ts',
+    target: "if (coverMargin > 0) actualCover = 'home';",
+    replacement: "if (coverMargin < 0) actualCover = 'home';"
+  },
+  {
     id: 'roi-sign-flipped',
     name: 'ROI loss term sign flipped in backtest.ts',
     targetFile: 'research/backtest.ts',
+    target: 'const netUnits = wins * (10 / 11) - losses;',
+    replacement: 'const netUnits = wins * (10 / 11) + losses;'
+  },
+  {
+    id: 'engine-roi-sign-flipped',
+    name: 'ROI loss term sign flipped in backtest-engine.ts',
+    targetFile: 'research/backtest-engine.ts',
     target: 'const netUnits = wins * (10 / 11) - losses;',
     replacement: 'const netUnits = wins * (10 / 11) + losses;'
   },

@@ -3,7 +3,7 @@ import path from 'path';
 import { predictGame } from '../src/engine/predictor';
 import { GameMarket, HistoricalGame, PredictionInput } from '../src/engine/types';
 
-interface SeasonGame {
+export interface SeasonGame {
   id: string;
   week: number;
   seasonType: number;
