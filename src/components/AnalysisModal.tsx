@@ -284,7 +284,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                       <label className="text-[8px] text-slate-500 uppercase mb-1">{game.awayTeam.abbreviation}</label>
                       <input 
                         type="number" 
-                        placeholder={analysis.awayScorePrediction.toString()}
+                        placeholder="—"
                         value={customAwayScore}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -301,7 +301,7 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                       <label className="text-[8px] text-slate-500 uppercase mb-1">{game.homeTeam.abbreviation}</label>
                       <input 
                         type="number" 
-                        placeholder={analysis.homeScorePrediction.toString()}
+                        placeholder="—"
                         value={customHomeScore}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -332,6 +332,9 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                   >
                     <User className="w-3.5 h-3.5" /> Save Custom Pick (Deviate)
                   </button>
+                  {(!customHomeScore || !customAwayScore) && (
+                    <p className="mt-2 text-[10px] text-slate-500 text-center">Enter both scores to deviate, or use Take the Engine's Pick above.</p>
+                  )}
                 </div>
               </div>
             ) : (
