@@ -3,7 +3,7 @@
 **Pre-registration timestamp:** 2026-10-06T16:25:00-04:00  
 **Pre-registration SHA-256:** `f238f21ac6eea17759c620624eeaf9f8268c37511c43cf6901d871d7171c6d1d`  
 **Pre-registration link:** [matchup-backtest-prereg.md](./matchup-backtest-prereg.md) 
-**Integrity note:** Pre-registered before any candidate evaluation on the holdout set. Coefficients and shrinkage constants were set entirely a priori; none were tuned on 2024 or 2025 game outcomes.  
+**Integrity note:** The pre-registration file's SHA-256 is recorded; it binds that file's *content* to the backtest results. The ordering of the pre-registration file relative to the first holdout run is **not** independently evidenced, and the 16:25 timestamp is self-recorded. Coefficients and shrinkage constants are *stated* to be a-priori (none was tuned on 2024 or 2025 game outcomes) rather than proven so. See the Disclosure.  
 **Disclosure:** The ordering of pre-registration and first holdout run is not independently evidenced (the first version of this document was untracked and edited after the results file was written); the decision-rule correction method described below was named after the run.
 
 ---
@@ -14,11 +14,13 @@
 **Verdict M2:** DO NOT ADOPT  
 **Verdict M3:** DO NOT ADOPT  
 
+**M2 verdict scope:** The M2 verdict covers only the inputs `calculateM2Adjustment` actually uses — man/zone coverage tendency and the personnel-vs-front term. It does **not** cover Cover 2/3 (those counters are written but never read) or defensive front alignment beyond the personnel-vs-front term. This scope reflects what the code actually consumes in this backtest.
+
 ---
 
 ## 1. Executive Summary & Decision Rule Application
 
-Under the project's pre-registered decision rule, all three candidate models fail out-of-sample adoption criteria. Plain Massey power ratings remain superior. Adding unit-efficiency, scheme, or red-zone matchup adjustments introduces noise without genuine predictive edge.
+Under the project's pre-registered decision rule, all three candidate models fail out-of-sample adoption criteria. Plain Massey power ratings remain the best-performing candidate tested here. Adding unit-efficiency, scheme, or red-zone matchup adjustments produced no measurable improvement over that baseline in this backtest based on the data tested here.
 
 ### Pre-Registered Decision Rule (Verbatim)
 A candidate is **ADOPT** only if:
@@ -35,7 +37,7 @@ For criterion (a), the bootstrap paired-Brier p-values were corrected with Holm-
 | Candidate | (a) Pooled Paired-Brier Improvement [95% CI]; raw p, Holm-adj p (m=3) | (b) Consistency Across 2024 & 2025 | (c) Beats >= 95% Placebo Permutations | Verdict |
 |---|---|---|---|---|
 | **M1: Unit Efficiency** | **-0.004135** [-0.010461, +0.002039] (Worse than Massey); raw p 0.9024, Holm-adj p 1.0000 | No (+0.0051 in 2024, -0.0230 in 2025) | **35.5%** (Fails 95% threshold) | **DO NOT ADOPT** |
-| **M2: Scheme Matchup** | **+0.000022** [-0.001928, +0.002065] (Straddles zero); raw p 0.4932, Holm-adj p 1.0000 | Mixed (-0.0002 in 2024, +0.0006 in 2025) | **57.0%** (Fails 95% threshold; random noise) | **DO NOT ADOPT** |
+| **M2: Scheme Matchup** | **+0.000022** [-0.001928, +0.002065] (Straddles zero); raw p 0.4932, Holm-adj p 1.0000 | Mixed (-0.0002 in 2024, +0.0006 in 2025) | **57.0%** (Fails 95% threshold; no measurable improvement detected) | **DO NOT ADOPT** |
 | **M3: Red Zone** | **-0.000627** [-0.003170, +0.001818] (Worse than Massey); raw p 0.6834, Holm-adj p 1.0000 | No (-0.0004 in 2024, -0.0011 in 2025) | **33.5%** (Fails 95% threshold) | **DO NOT ADOPT** |
 
 None of the three clears corrected criterion (a), so no verdict value changes under the corrected criteria; all three remain **DO NOT ADOPT**.
@@ -97,7 +99,7 @@ Evaluated walk-forward across 328 total holdout games:
 | 2025 (107) | M2 Scheme Matchup | 4 | 1 | 5 | 0.3750 |
 | 2025 (107) | M3 Red Zone | 2 | 4 | 6 | 0.6875 |
 
-No candidate differs from the Massey baseline in SU correctness at any holdout (all p >= 0.146). McNemar is reported for transparency and is not part of the decision rule.
+No candidate showed a statistically detectable difference from the Massey baseline in SU correctness at any holdout (all p >= 0.146). McNemar is reported for transparency and is not part of the decision rule.
 
 ---
 
@@ -105,9 +107,9 @@ No candidate differs from the Massey baseline in SU correctness at any holdout (
 
 To guard against data mining, each candidate was subjected to 200 within-week permutations (shuffling team ratings exclusively among teams playing in the exact same week, using fixed PRNG seeds).
 
-- **M1 Unit Efficiency:** Beats only **35.5%** of placebo permutations. A randomly permuted unit efficiency rating produces a better Brier score than the true team unit efficiency 64.5% of the time. This confirms that pass/rush EPA splits overfit in-season samples and degrade general power ratings.
-- **M2 Scheme Matchup:** Beats **57.0%** of placebo permutations. This is virtually indistinguishable from a 50/50 coin flip, indicating zero genuine signal.
-- **M3 Red Zone:** Beats only **33.5%** of placebo permutations. Red zone scoring variance is largely unrepeatable noise; adjusting for it harms probability calibration.
+- **M1 Unit Efficiency:** Beats only **35.5%** of placebo permutations. A randomly permuted unit efficiency rating produces a better Brier score than the true team unit efficiency 64.5% of the time. This is consistent with pass/rush EPA splits overfitting in-season samples and degrading general power ratings in this sample.
+- **M2 Scheme Matchup:** Beats **57.0%** of placebo permutations. This is virtually indistinguishable from a 50/50 coin flip; no measurable improvement was detected in this sample.
+- **M3 Red Zone:** Beats only **33.5%** of placebo permutations. Red zone scoring variance was not repeatable enough to yield a measurable improvement in this sample; in this test, the adjustment was associated with worse probability calibration.
 
 ---
 
@@ -117,17 +119,17 @@ To evaluate the specific sub-dimensions requested by the user, we isolated and a
 
 | Ablation Configuration | Pooled Brier Score | Difference vs Full M2 | Observations |
 |---|---|---|---|---|
-| **Full M2 Scheme Model** | 0.2151 | — | Man/zone and personnel terms only; coverage-type and defensive-front counts are charted but are not terms of the adjustment. |
+| **Full M2 Scheme Model** | 0.2151 | — | Man/zone and personnel-vs-front terms only; coverage-type (Cover 2/3) and defensive-front counts are charted but are not terms of the adjustment. |
 | **Without Man vs Zone** | **0.2149** | -0.0002 (Better) | Removing man vs zone charting slightly *improves* calibration. |
-| **Without Coverage Type (Cover 2/3 mix)** | 0.2151 | 0.0000 (No change) | Cover 2/3 counts are charted (`backtest-matchup.ts` tracks them) but are not read by `calculateM2Adjustment`; ablating leaves predictions identical to the full model. |
-| **Without Personnel (11, 12, 21 personnel)** | 0.2152 | +0.0001 (Negligible) | Personnel usage shares provide zero measurable signal over Massey. |
-| **Without Defensive Front (3-4 vs 4-3 vs nickel+)** | 0.2152 | +0.0001 (Negligible) | Front counts are charted but not read by the adjustment; ablating front disables the same personnel-vs-front term as the personnel ablation (`matchup-models.ts:316`), hence the identical Brier. |
+| **Without Coverage Type (Cover 2/3 mix)** | 0.2151 | 0.0000 (No change) | **NOT TESTED.** This is not a test of Cover 2 or Cover 3: the counters are charted (`backtest-matchup.ts` tracks them) but never read by `calculateM2Adjustment`. M2 does not use Cover-2/3 data, so this backtest is silent on whether Cover 2 or Cover 3 matchups matter. |
+| **Without Personnel (11, 12, 21 personnel)** | 0.2152 | +0.0001 (Negligible) | Personnel usage shares showed no measurable improvement over Massey in this sample. |
+| **Without Defensive Front (3-4 vs 4-3 vs nickel+)** | 0.2152 | +0.0001 (Negligible) | Partially tested: the M2 verdict covers front only through the personnel-vs-front term (`matchup-models.ts:316`); it does not test front alignment beyond that (this row disables the same shared term as the personnel ablation, so the Brier value is identical). |
 
 ### Component-by-Component Findings:
 1. **Man vs Zone Coverage:** In theory, quarterbacks exhibit distinct efficiency profiles against man vs zone. In practice, defensive coordinators alter coverage distribution on a game-plan basis, and pass-play sample sizes (~25-35 pass plays per week) are too small to reliably project weekly matchups.
-2. **Cover 2 and Cover 3 Mix:** Charted coverage tags account for ~49% of snaps. Variations in opponent Cover 2 or Cover 3 rates do not alter game margins beyond what least-squares scoring power ratings already reflect.
-3. **11 Personnel, 12 Personnel, 21 Personnel:** Nearly all NFL offenses operate out of 11 personnel 60–75% of the time. The marginal variance between 11, 12, and 21 personnel packages does not survive out-of-sample holdout testing.
-4. **3-4 vs 4-3 Base Fronts:** Modern defenses play nickel or dime (5+ defensive backs) on over 65% of snaps. The classical 3-4 vs 4-3 distinction accounts for a tiny fraction of total plays and carries no measurable predictive edge.
+2. **Cover 2 and Cover 3 Mix — NOT TESTED:** Charted coverage tags account for ~49% of snaps, but `calculateM2Adjustment` does not read the Cover-2/3 counters (they are written and never consumed), so this backtest is silent on whether Cover 2 or Cover 3 matchups matter. Testing that hypothesis would require a new, separately pre-registered candidate with its own holdout run.
+3. **11 Personnel, 12 Personnel, 21 Personnel:** Nearly all NFL offenses operate out of 11 personnel 60–75% of the time. The marginal variance between 11, 12, and 21 personnel packages showed no measurable improvement out-of-sample in this backtest.
+4. **3-4 vs 4-3 Base Fronts:** Modern defenses play nickel or dime (5+ defensive backs) on over 65% of snaps. In this backtest the M2 verdict covers defensive front only through the personnel-vs-front term; front alignment beyond that was not tested (see §4).
 
 ---
 
@@ -162,5 +164,5 @@ To evaluate the specific sub-dimensions requested by the user, we isolated and a
 ## 7. Recommendation for Task 027
 
 **Do not wire unit efficiency, scheme tendencies, or red zone splits into the live prediction engine.**
-The empirical evidence indicates intervals straddling zero for M2 and M3 and calibration degradation for M1; across candidates, additions did not meet the pre-registered adoption criteria (failures on at least one criterion). The Massey least-squares decision engine remains the optimal predictive core.
+The empirical evidence indicates intervals straddling zero for M2 and M3 and worse calibration for M1 in this sample; across candidates, additions did not meet the pre-registered adoption criteria (failures on at least one criterion). The Massey least-squares decision engine remains the best-performing candidate tested here and stays the decision core. The null findings in this sample should not be interpreted as proof that the tested scheme effects do not exist; only that no measurable improvement was detected under the tested design.
 Task 027 should treat unit stats and scheme priors as **contextual descriptive displays and narrative drivers** for user analysis, rather than margin modifiers that corrupt prediction accuracy.
