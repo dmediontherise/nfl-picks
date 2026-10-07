@@ -14,25 +14,54 @@ const getTeamData = (team: Team) => {
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-export function getSafeRosterSnapshot(customSnapshot?: any): RosterSnapshot | null {
+export interface SafeSnapshotResult {
+  snapshot: RosterSnapshot | null;
+  isStale: boolean;
+}
+
+export function loadRosterSnapshotWithStatus(customSnapshot?: any): SafeSnapshotResult {
   try {
-    if (customSnapshot === null) return null;
+    if (customSnapshot === null) return { snapshot: null, isStale: false };
+
+    // Check fetchedAt staleness if present
+    const rawFetchedAt = customSnapshot?.fetchedAt || undefined;
+    if (rawFetchedAt) {
+      const fetchedTime = new Date(rawFetchedAt).getTime();
+      if (!isNaN(fetchedTime) && (Date.now() - fetchedTime) > SEVEN_DAYS_MS) {
+        console.warn('Roster snapshot is older than 7 days. Treating as absent per degradation contract.');
+        return { snapshot: null, isStale: true };
+      }
+    }
+
     const snapshot = customSnapshot !== undefined ? loadRosterSnapshot(customSnapshot) : loadRosterSnapshot();
-    if (!snapshot || !snapshot.fetchedAt) return null;
+    if (!snapshot || !snapshot.fetchedAt) return { snapshot: null, isStale: false };
 
     const fetchedTime = new Date(snapshot.fetchedAt).getTime();
-    if (isNaN(fetchedTime)) return null;
+    if (isNaN(fetchedTime)) return { snapshot: null, isStale: false };
 
     const ageMs = Date.now() - fetchedTime;
     if (ageMs > SEVEN_DAYS_MS) {
       console.warn('Roster snapshot is older than 7 days. Treating as absent per degradation contract.');
-      return null;
+      return { snapshot: null, isStale: true };
     }
-    return snapshot;
+    return { snapshot, isStale: false };
   } catch (err) {
+    // If the input was stale, preserve isStale: true even on load/validation failure
+    const rawFetchedAt = customSnapshot?.fetchedAt;
+    let isStale = false;
+    if (rawFetchedAt) {
+      const fetchedTime = new Date(rawFetchedAt).getTime();
+      if (!isNaN(fetchedTime) && (Date.now() - fetchedTime) > SEVEN_DAYS_MS) {
+        isStale = true;
+      }
+    }
     console.warn('Roster snapshot load or validation failed. Degrading safely to zero availability adjustments:', err);
-    return null;
+    return { snapshot: null, isStale };
   }
+}
+
+export function getSafeRosterSnapshot(customSnapshot?: any): RosterSnapshot | null {
+  return loadRosterSnapshotWithStatus(customSnapshot).snapshot;
 }
 
 export function resolveTeamQB(
@@ -202,7 +231,7 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false, 
   let away = { ...getTeamData(game.awayTeam) };
 
   // Resolve roster snapshot, team QBs, and injury rosters
-  const snapshot = getSafeRosterSnapshot(customSnapshot);
+  const { snapshot, isStale: isRosterStale } = loadRosterSnapshotWithStatus(customSnapshot);
   const homeQBInfo = resolveTeamQB(home.abbreviation, snapshot, home.qbStats?.name);
   const awayQBInfo = resolveTeamQB(away.abbreviation, snapshot, away.qbStats?.name);
 
@@ -422,7 +451,8 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false, 
     prediction: enginePrediction,
     narrativeDetails: narrativeObj,
 
-    retrospective: retrospective
+    retrospective: retrospective,
+    isRosterStale: isRosterStale,
   };
 
   analysisCache[game.id] = { result, timestamp: Date.now() };

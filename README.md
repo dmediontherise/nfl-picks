@@ -138,6 +138,14 @@ Google auth and prediction sync. The decision engine is dependency-free TypeScri
 
 ---
 
+## Data sources
+
+- **[nflverse](https://github.com/nflverse/nflverse-data)**: Play-by-play, team efficiency, and participation data feeds.
+- **[FTN Data](https://www.ftnfantasy.com/)**: Charting metrics (blitz rates, play-action, motion, box counts) via nflverse, licensed under [CC-BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+
+
+---
+
 ## Disclaimer
 
 For educational and entertainment purposes. Nothing here is financial advice, and the model's

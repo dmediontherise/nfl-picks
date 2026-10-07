@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Trophy, AlertTriangle, Activity, User, BrainCircuit, Flame, Zap, RefreshCw, DollarSign, History, Target, CheckCircle, Bot } from 'lucide-react';
 import { Game, AnalysisResult, UserPrediction, Team, AgreementState } from '../types';
 import { analyzeMatchup } from '../services/geminiService';
+import StatComparison from '../StatComparison';
 
 interface AnalysisModalProps {
   game: Game;
@@ -174,6 +175,16 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
             </div>
           </div>
         </div>
+
+        {/* Snapshot Staleness Warning Banner */}
+        {analysis?.isRosterStale && (
+          <div className="bg-amber-950/80 border-b border-amber-800 text-amber-200 px-4 py-2.5 text-xs flex items-center justify-center gap-2 text-center shrink-0">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              <strong>Roster Picture Stale:</strong> The latest roster and injury snapshot is older than 7 days. Injury and availability adjustments have degraded safely to zero to prevent uncalibrated decisions.
+            </span>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 bg-slate-950">
@@ -614,6 +625,14 @@ const AnalysisModal: React.FC<AnalysisModalProps> = ({ game, onClose, userPredic
                     </div>
                   </div>
                 </div>
+
+                {/* Team Unit Stats & Matchup Comparison (Display-only context) */}
+                <StatComparison
+                  homeTeamAbbr={game.homeTeam.abbreviation}
+                  awayTeamAbbr={game.awayTeam.abbreviation}
+                  homeColor={game.homeTeam.color}
+                  awayColor={game.awayTeam.color}
+                />
               </>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-xl p-8">

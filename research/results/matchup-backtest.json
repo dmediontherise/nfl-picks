@@ -1,0 +1,245 @@
+{
+  "generatedAt": "2026-10-07T00:37:34.839Z",
+  "preRegistrationSha256": "f238f21ac6eea17759c620624eeaf9f8268c37511c43cf6901d871d7171c6d1d",
+  "datasets": {
+    "games2024Count": 285,
+    "games2025Count": 285,
+    "holdout2024Count": 221,
+    "holdout2025Count": 107,
+    "pooledHoldoutCount": 328
+  },
+  "metrics": {
+    "massey": {
+      "y2024": {
+        "games": 221,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6923,
+        "atsAccuracy": 0.4679,
+        "atsRecord": "102-116-3",
+        "brierScore": 0.2067,
+        "logLoss": 0.6014,
+        "meanAbsScoreError": 7.4095,
+        "roiAt110": -0.1053
+      },
+      "y2025": {
+        "games": 107,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6168,
+        "atsAccuracy": 0.5701,
+        "atsRecord": "61-46-0",
+        "brierScore": 0.2326,
+        "logLoss": 0.6575,
+        "meanAbsScoreError": 7.8645,
+        "roiAt110": 0.0884
+      },
+      "pooled": {
+        "games": 328,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6677,
+        "atsAccuracy": 0.5015,
+        "atsRecord": "163-162-3",
+        "brierScore": 0.2151,
+        "logLoss": 0.6197,
+        "meanAbsScoreError": 7.5579,
+        "roiAt110": -0.0421
+      }
+    },
+    "M1_unit_efficiency": {
+      "y2024": {
+        "games": 221,
+        "atsExcluded": 0,
+        "suAccuracy": 0.7014,
+        "atsAccuracy": 0.5183,
+        "atsRecord": "113-105-3",
+        "brierScore": 0.2016,
+        "logLoss": 0.5906,
+        "meanAbsScoreError": 7.3778,
+        "roiAt110": -0.0103
+      },
+      "y2025": {
+        "games": 107,
+        "atsExcluded": 0,
+        "suAccuracy": 0.5607,
+        "atsAccuracy": 0.486,
+        "atsRecord": "52-55-0",
+        "brierScore": 0.2556,
+        "logLoss": 0.7096,
+        "meanAbsScoreError": 8.0234,
+        "roiAt110": -0.0722
+      },
+      "pooled": {
+        "games": 328,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6555,
+        "atsAccuracy": 0.5077,
+        "atsRecord": "165-160-3",
+        "brierScore": 0.2192,
+        "logLoss": 0.6294,
+        "meanAbsScoreError": 7.5884,
+        "roiAt110": -0.0305
+      },
+      "bootstrapBrierDiff": {
+        "diffMean": -0.004135,
+        "ciLower": -0.010461,
+        "ciUpper": 0.002039,
+        "pValue": 0.9024
+      },
+      "holmAdjustedP": 1,
+      "placeboBeatPct": 35.5
+    },
+    "M2_scheme_matchup": {
+      "y2024": {
+        "games": 221,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6878,
+        "atsAccuracy": 0.4587,
+        "atsRecord": "100-118-3",
+        "brierScore": 0.2069,
+        "logLoss": 0.6011,
+        "meanAbsScoreError": 7.414,
+        "roiAt110": -0.1226
+      },
+      "y2025": {
+        "games": 107,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6449,
+        "atsAccuracy": 0.5701,
+        "atsRecord": "61-46-0",
+        "brierScore": 0.232,
+        "logLoss": 0.6576,
+        "meanAbsScoreError": 7.8645,
+        "roiAt110": 0.0884
+      },
+      "pooled": {
+        "games": 328,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6738,
+        "atsAccuracy": 0.4954,
+        "atsRecord": "161-164-3",
+        "brierScore": 0.2151,
+        "logLoss": 0.6196,
+        "meanAbsScoreError": 7.561,
+        "roiAt110": -0.0538
+      },
+      "bootstrapBrierDiff": {
+        "diffMean": 0.000022,
+        "ciLower": -0.001928,
+        "ciUpper": 0.002065,
+        "pValue": 0.4932
+      },
+      "holmAdjustedP": 1,
+      "placeboBeatPct": 57,
+      "ablations": {
+        "noManZoneBrier": 0.2149,
+        "noCoverageTypeBrier": 0.2151,
+        "noPersonnelBrier": 0.2152,
+        "noFrontBrier": 0.2152
+      }
+    },
+    "M3_red_zone": {
+      "y2024": {
+        "games": 221,
+        "atsExcluded": 0,
+        "suAccuracy": 0.7059,
+        "atsAccuracy": 0.4862,
+        "atsRecord": "106-112-3",
+        "brierScore": 0.2071,
+        "logLoss": 0.603,
+        "meanAbsScoreError": 7.4321,
+        "roiAt110": -0.0708
+      },
+      "y2025": {
+        "games": 107,
+        "atsExcluded": 0,
+        "suAccuracy": 0.5981,
+        "atsAccuracy": 0.5607,
+        "atsRecord": "60-47-0",
+        "brierScore": 0.2337,
+        "logLoss": 0.6618,
+        "meanAbsScoreError": 7.9206,
+        "roiAt110": 0.0705
+      },
+      "pooled": {
+        "games": 328,
+        "atsExcluded": 0,
+        "suAccuracy": 0.6707,
+        "atsAccuracy": 0.5108,
+        "atsRecord": "166-159-3",
+        "brierScore": 0.2158,
+        "logLoss": 0.6222,
+        "meanAbsScoreError": 7.5915,
+        "roiAt110": -0.0247
+      },
+      "bootstrapBrierDiff": {
+        "diffMean": -0.000627,
+        "ciLower": -0.00317,
+        "ciUpper": 0.001818,
+        "pValue": 0.6834
+      },
+      "holmAdjustedP": 1,
+      "placeboBeatPct": 33.5
+    },
+    "mcnemarSU": {
+      "pooled": {
+        "M1_unit_efficiency": {
+          "b": 15,
+          "c": 19,
+          "n": 328,
+          "pExact": 0.6076
+        },
+        "M2_scheme_matchup": {
+          "b": 8,
+          "c": 6,
+          "n": 328,
+          "pExact": 0.7905
+        },
+        "M3_red_zone": {
+          "b": 8,
+          "c": 7,
+          "n": 328,
+          "pExact": 1
+        }
+      },
+      "y2024": {
+        "M1_unit_efficiency": {
+          "b": 12,
+          "c": 10,
+          "n": 221,
+          "pExact": 0.8318
+        },
+        "M2_scheme_matchup": {
+          "b": 4,
+          "c": 5,
+          "n": 221,
+          "pExact": 1
+        },
+        "M3_red_zone": {
+          "b": 6,
+          "c": 3,
+          "n": 221,
+          "pExact": 0.5078
+        }
+      },
+      "y2025": {
+        "M1_unit_efficiency": {
+          "b": 3,
+          "c": 9,
+          "n": 107,
+          "pExact": 0.146
+        },
+        "M2_scheme_matchup": {
+          "b": 4,
+          "c": 1,
+          "n": 107,
+          "pExact": 0.375
+        },
+        "M3_red_zone": {
+          "b": 2,
+          "c": 4,
+          "n": 107,
+          "pExact": 0.6875
+        }
+      }
+    }
+  }
+}
