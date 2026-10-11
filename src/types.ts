@@ -101,6 +101,10 @@ export interface AnalysisResult {
   coachingMatchup: string;
   playersToWatch: PlayerValue[]; // Updated type here
   sources: Source[];
+
+  // Snapshot Staleness Flags
+  isRosterStale?: boolean;
+  isTeamStatsStale?: boolean;
 }
 
 export type AgreementState = 'unset' | 'agreed' | 'deviated';

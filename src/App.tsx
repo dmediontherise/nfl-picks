@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthStatus } from './components/AuthStatus';
 import { downloadPredictionsAsCSV } from './utils/csvExporter';
 import { CURRENT_SEASON, SEASON_STAGES, SeasonStage } from './data/nfl_data';
+import { DATA_ATTRIBUTION } from './data/teamStats';
 import { Calendar, MapPin, ChevronRight, RefreshCw, Server, Loader2, Download, Trophy, GitBranch, AlertCircle } from 'lucide-react';
 
 export async function backfillUnresolvedResults(
@@ -498,8 +499,11 @@ const MediPicksApp: React.FC = () => {
         />
       )}
 
-      {/* Footer Disclaimer */}
-      <footer className="max-w-7xl mx-auto px-4 py-8 border-t border-slate-900 mt-8">
+      {/* Footer Disclaimer & Data Attribution */}
+      <footer className="max-w-7xl mx-auto px-4 py-8 border-t border-slate-900 mt-8 space-y-3">
+        <p className="text-[12px] leading-relaxed text-slate-500 text-center max-w-3xl mx-auto">
+          {DATA_ATTRIBUTION}
+        </p>
         <p className="text-[12px] leading-relaxed text-slate-600 text-center max-w-3xl mx-auto">
           Disclaimer: This application and the NFL picks provided herein are for educational and entertainment purposes only. 
           All information is intended to enhance the fan experience and should not be construed as professional financial or legal advice. 

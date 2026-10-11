@@ -4,3 +4,4 @@ build
 .env
 .relay/
 scratch/
+research/data/nflverse/

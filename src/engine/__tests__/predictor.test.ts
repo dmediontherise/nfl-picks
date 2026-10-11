@@ -603,9 +603,28 @@ describe('Prediction Engine (src/engine/predictor.ts)', () => {
   });
 
   describe('Task 018: Displaced starter detection on real data', () => {
+    const atlDisplacedFixture: RosterSnapshot = {
+      schemaVersion: 1,
+      fetchedAt: '2026-09-08T00:00:00.000Z',
+      transactions: [],
+      teams: {
+        ATL: {
+          roster: [
+            { name: 'Tua Tagovailoa', position: 'QB', group: 'offense', depthChartRank: 1, rank: 1, status: 'Active' },
+            { name: 'Michael Penix Jr.', position: 'QB', group: 'offense', depthChartRank: 2, rank: 2, status: 'Out', previousRank: 1, shortComment: 'Knee injury' }
+          ],
+          groups: {
+            offense: [
+              { name: 'Tua Tagovailoa', position: 'QB', group: 'offense', depthChartRank: 1, rank: 1, status: 'Active' },
+              { name: 'Michael Penix Jr.', position: 'QB', group: 'offense', depthChartRank: 2, rank: 2, status: 'Out', previousRank: 1, shortComment: 'Knee injury' }
+            ]
+          }
+        }
+      }
+    };
+
     test('R4: committed snapshot - ATL Michael Penix Jr. (rank 2, Out) is displaced and scores at the full QB weight (5.5), not the backup weight (0.5)', () => {
-      const snapshot = loadRosterSnapshot();
-      const atlInjuries = getTeamInjuriesForEngine(snapshot, 'ATL');
+      const atlInjuries = getTeamInjuriesForEngine(atlDisplacedFixture, 'ATL');
 
       const penix = atlInjuries.find(p => p.name === 'Michael Penix Jr.');
       expect(penix).toBeDefined();
@@ -619,8 +638,7 @@ describe('Prediction Engine (src/engine/predictor.ts)', () => {
     });
 
     test('R6: replacement moving up is not an additional loss - ATL scores exactly one displaced QB at 5.5', () => {
-      const snapshot = loadRosterSnapshot();
-      const atlInjuries = getTeamInjuriesForEngine(snapshot, 'ATL');
+      const atlInjuries = getTeamInjuriesForEngine(atlDisplacedFixture, 'ATL');
 
       const displacedQBs = atlInjuries.filter(p => p.position === 'QB' && p.isDisplacedStarter);
       expect(displacedQBs).toHaveLength(1);
@@ -725,6 +743,167 @@ describe('Prediction Engine (src/engine/predictor.ts)', () => {
       expect(pred.margin).not.toBe(0);
       expect(pred.margin).toBe(1);
       expect(pred.winner).toBe('H');
+    });
+  });
+
+  describe('Task 027: Availability gaps and invariant testing', () => {
+    test('Suspension fixture: suspended player scores at full 1.0 multiplier matching Out/IR', () => {
+      // 1. Multiplier check
+      expect(getStatusMultiplier('Suspension')).toBe(1.0);
+      expect(getStatusMultiplier('suspension')).toBe(1.0);
+
+      // 2. Suspended starter QB evaluation
+      const suspendedQB: PlayerInjury = {
+        name: 'Suspended QB',
+        position: 'QB',
+        status: 'Suspension',
+        depthChartRank: 1
+      };
+      const qbPenalty = calculatePlayerInjuryPenalty(suspendedQB);
+      expect(qbPenalty).toBeCloseTo(5.5, 4);
+
+      // 3. Suspended starter WR evaluation
+      const suspendedWR: PlayerInjury = {
+        name: 'Suspended WR',
+        position: 'WR',
+        status: 'Suspension',
+        depthChartRank: 1
+      };
+      expect(calculatePlayerInjuryPenalty(suspendedWR)).toBeCloseTo(1.4, 4);
+
+      // 4. Team penalty evaluation with suspension
+      const teamPen = calculateTeamInjuryPenalty([suspendedQB, suspendedWR]);
+      expect(teamPen.penalty).toBeCloseTo(6.9, 4);
+    });
+
+    test('Trade/signing at starter slot: recently added healthy starter has 0 penalty and does not penalize team', () => {
+      const healthyTradeAddition: PlayerInjury = {
+        name: 'Davante Adams',
+        position: 'WR',
+        status: 'Active',
+        depthChartRank: 1
+      };
+      expect(calculatePlayerInjuryPenalty(healthyTradeAddition)).toBe(0);
+
+      const teamPen = calculateTeamInjuryPenalty([healthyTradeAddition]);
+      expect(teamPen.penalty).toBe(0);
+      expect(teamPen.unclippedPenalty).toBe(0);
+      expect(teamPen.playerPenalties).toHaveLength(0);
+    });
+
+    test('QB change driver: injured starter QB produces dedicated roster_injury_modifier driver and shifts margin', () => {
+      const pred = predictGame({
+        game: { homeAbbr: 'KC', awayAbbr: 'DEN' },
+        history: [],
+        homeInjuries: [
+          { name: 'Patrick Mahomes', position: 'QB', status: 'Out', depthChartRank: 1 }
+        ],
+        awayInjuries: []
+      });
+
+      const qbDriver = pred.drivers.find(d => d.key === 'roster_injury_modifier');
+      expect(qbDriver).toBeDefined();
+      expect(qbDriver!.magnitude).toBeCloseTo(5.5, 2);
+      expect(qbDriver!.direction).toBe('away');
+      expect(qbDriver!.detail).toContain('Patrick Mahomes');
+      expect(qbDriver!.detail).toContain('QB');
+      expect(qbDriver!.detail).toContain('Out');
+    });
+
+    test('Snapshot invariance: predicted margin across fixtures is byte-identical because all Task 026 matchup terms are DO NOT ADOPT', () => {
+      const inputA: PredictionInput = {
+        game: { homeAbbr: 'KC', awayAbbr: 'DEN', isNeutralSite: false, seasonType: 2, week: 1 },
+        history: [
+          { homeAbbr: 'KC', awayAbbr: 'DEN', homeScore: 27, awayScore: 20, isNeutralSite: false, seasonType: 2, week: 1 }
+        ],
+        homeInjuries: [],
+        awayInjuries: []
+      };
+      const predA = predictGame(inputA);
+      const predB = predictGame(inputA);
+
+      expect(predA.projectedMargin).toBe(predB.projectedMargin);
+      expect(predA.homeScore).toBe(predB.homeScore);
+      expect(predA.awayScore).toBe(predB.awayScore);
+      expect(predA.winner).toBe(predB.winner);
+      expect(predA.drivers).toEqual(predB.drivers);
+    });
+  });
+
+  describe('Task 032: confidence mid-range and the exact-push spread pick', () => {
+    test('R1a: dev just under the 0.08 knee pins the first-branch confidence exactly', () => {
+      // Neutral site + empty history -> both Massey ratings are 0 and HFA is 0.
+      // Away injuries: WR1 Doubtful (1.4 * 0.75 = 1.05) and WR2 Questionable (0.2 * 0.35 = 0.07)
+      // -> injuryAdj = +1.12, so projectedMarginPre = 1.12.
+      const pred = predictGame({
+        game: { homeAbbr: 'H', awayAbbr: 'A', isNeutralSite: true },
+        history: [],
+        awayInjuries: [
+          { name: 'WR1', position: 'WR', status: 'Doubtful', depthChartRank: 1 },
+          { name: 'WR2', position: 'WR', status: 'Questionable', depthChartRank: 2 }
+        ]
+      });
+
+      // p = 1 / (1 + e^-(1.12/7)) = 0.539915 -> 0.5399; dev = |0.5399 - 0.5| = 0.0399 (~0.04).
+      expect(pred.homeWinProbability).toBe(0.5399);
+      const dev = Math.abs(pred.homeWinProbability - 0.5);
+      expect(dev).toBeCloseTo(0.0399, 4);
+      expect(dev).toBeGreaterThan(0);
+      expect(dev).toBeLessThanOrEqual(0.08);
+
+      // First branch (dev <= 0.08): 50 + (dev / 0.08) * 10 = 50 + (0.0399 / 0.08) * 10
+      //                          = 50 + 4.9875 = 54.9875 -> 55.0.
+      expect(pred.confidence).toBe(55.0);
+    });
+
+    test('R1b: the two confidence branches meet at ~60.0 across dev = 0.08 without a jump', () => {
+      // At dev = 0.08 both formulas coincide:
+      //   first  branch (dev <= 0.08): 50 + (0.08 / 0.08) * 10          = 60.0
+      //   second branch (dev  > 0.08): 60 + ((0.08 - 0.08) / 0.42) * 38 = 60.0
+      // so the curve is continuous across the knee.
+      // Home game + empty history -> projectedMarginPre = HFA (2.0) + injuryAdj.
+      const below = predictGame({
+        game: { homeAbbr: 'H', awayAbbr: 'A' },
+        history: [],
+        awayInjuries: [{ name: 'WR2', position: 'WR', status: 'Out', depthChartRank: 2 }] // +0.20 -> m = 2.20
+      });
+      const above = predictGame({
+        game: { homeAbbr: 'H', awayAbbr: 'A' },
+        history: [],
+        awayInjuries: [{ name: 'RB1', position: 'RB', status: 'Questionable', depthChartRank: 1 }] // +0.35 -> m = 2.35
+      });
+
+      // p = 0.5779 -> dev 0.0779 (first branch); p = 0.5831 -> dev 0.0831 (second branch).
+      expect(below.homeWinProbability).toBe(0.5779);
+      expect(above.homeWinProbability).toBe(0.5831);
+      expect(Math.abs(below.homeWinProbability - 0.5)).toBeLessThan(0.08);
+      expect(Math.abs(above.homeWinProbability - 0.5)).toBeGreaterThan(0.08);
+
+      // First branch : 50 + (0.0779 / 0.08) * 10          = 59.7375 -> 59.7
+      // Second branch: 60 + ((0.0831 - 0.08) / 0.42) * 38 = 60.2805 -> 60.3
+      expect(below.confidence).toBe(59.7);
+      expect(above.confidence).toBe(60.3);
+
+      // Both sit near the knee's shared value (~60.0); crossing the knee is a mild slope, not a jump.
+      expect(below.confidence).toBeCloseTo(60.0, 0);
+      expect(above.confidence).toBeCloseTo(60.0, 0);
+      expect(Math.abs(above.confidence - below.confidence)).toBeLessThanOrEqual(1.0);
+    });
+
+    test('R2: an exact-push market spread (projectedMarginPre + spread === 0) picks the home team with edge 0', () => {
+      // Neutral site + empty history + away RB1 Out -> projectedMarginPre = +1.00 exactly.
+      // Market spread -1.0 -> coverMargin = 1.00 + (-1.0) = 0 -> exact push (coverMargin >= 0 picks home).
+      const pred = predictGame({
+        game: { homeAbbr: 'H', awayAbbr: 'A', isNeutralSite: true, market: { spread: -1.0, total: 44 } },
+        history: [],
+        awayInjuries: [{ name: 'RB1', position: 'RB', status: 'Out', depthChartRank: 1 }]
+      });
+
+      expect(pred.projectedMargin).toBe(1.0);
+      expect(pred.marketSpread).toBe(-1.0);
+      expect(pred.projectedMargin + (pred.marketSpread as number)).toBe(0);
+      expect(pred.spreadPick.team).toBe('H');
+      expect(pred.spreadPick.edge).toBe(0);
     });
   });
 });

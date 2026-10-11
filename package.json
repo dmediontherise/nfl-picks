@@ -15,6 +15,7 @@
     "test": "react-scripts test",
     "test:research": "npx tsx research/tests/index.ts",
     "snapshot:roster": "tsx scripts/fetch-roster-snapshot.ts",
+    "snapshot:teamstats": "tsx scripts/fetch-team-stats.ts",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build -b main --dest docs"
