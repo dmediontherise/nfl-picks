@@ -509,4 +509,62 @@ describe('Roster Snapshot Pipeline', () => {
       );
     });
   });
+
+  describe('Task 036: R2 / R3 separating fixtures', () => {
+    const p = (name: string, position: string, depthChartRank?: number, status?: InjuryStatus, previousRank?: number): RosterPlayer => ({
+      name,
+      position,
+      group: 'offense',
+      depthChartRank,
+      rank: depthChartRank,
+      status,
+      previousRank,
+    });
+
+    const teamOf = (roster: RosterPlayer[]): TeamSnapshot => ({ roster, groups: {} });
+
+    it('R2 only: previousRank 1 flags the buried displaced starter, not the lower-ranked unavailable teammate', () => {
+      // QB3 sits at depth rank 3 behind two healthy QBs, outside R3's window
+      // (rank <= bestAvailable.rank + 1), so only R2 can flag him. QB4 is
+      // unavailable with no history and must stay unflagged.
+      const team = teamOf([
+        p('QB1', 'QB', 1, 'Active'),
+        p('QB2', 'QB', 2, 'Active'),
+        p('QB3', 'QB', 3, 'Out', 1),
+        p('QB4', 'QB', 4, 'Out'),
+      ]);
+
+      const displaced = detectDisplacedStarters(team);
+      expect(displaced.size).toBe(1);
+      expect(displaced.has('QB3')).toBe(true);
+      expect(displaced.has('QB4')).toBe(false);
+    });
+
+    it('R3 only: cold-start snapshot flags the best-ranked unavailable player, the starter', () => {
+      // No player carries previousRank, so R2 cannot fire under any variant of
+      // its condition; the flag must come from the R3 fallback alone.
+      const team = teamOf([
+        p('QB1', 'QB', 1, 'Out'),
+        p('QB2', 'QB', 2, 'Active'),
+        p('QB3', 'QB', 3, 'Active'),
+      ]);
+
+      const displaced = detectDisplacedStarters(team);
+      expect(displaced.size).toBe(1);
+      expect(displaced.has('QB1')).toBe(true);
+    });
+
+    it('R3 only: two unavailable players with no history — only the best-ranked is flagged', () => {
+      const team = teamOf([
+        p('RB1', 'RB', 1, 'Active'),
+        p('RB2', 'RB', 2, 'Out'),
+        p('RB3', 'RB', 3, 'Out'),
+      ]);
+
+      const displaced = detectDisplacedStarters(team);
+      expect(displaced.size).toBe(1);
+      expect(displaced.has('RB2')).toBe(true);
+      expect(displaced.has('RB3')).toBe(false);
+    });
+  });
 });

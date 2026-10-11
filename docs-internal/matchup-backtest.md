@@ -115,21 +115,21 @@ To guard against data mining, each candidate was subjected to 200 within-week pe
 
 ## 4. Ablation Analysis: Scheme Subcomponents (M2)
 
-To evaluate the specific sub-dimensions requested by the user, we isolated and ablated each component of M2 on the pooled holdout:
+To evaluate the specific sub-dimensions requested by the user, we ablated each of M2's components on the pooled holdout (personnel and defensive front share a single term, so the last two rows are the same measurement):
 
 | Ablation Configuration | Pooled Brier Score | Difference vs Full M2 | Observations |
 |---|---|---|---|---|
 | **Full M2 Scheme Model** | 0.2151 | — | Man/zone and personnel-vs-front terms only; coverage-type (Cover 2/3) and defensive-front counts are charted but are not terms of the adjustment. |
 | **Without Man vs Zone** | **0.2149** | -0.0002 (Better) | Removing man vs zone charting slightly *improves* calibration. |
 | **Without Coverage Type (Cover 2/3 mix)** | 0.2151 | 0.0000 (No change) | **NOT TESTED.** This is not a test of Cover 2 or Cover 3: the counters are charted (`backtest-matchup.ts` tracks them) but never read by `calculateM2Adjustment`. M2 does not use Cover-2/3 data, so this backtest is silent on whether Cover 2 or Cover 3 matchups matter. |
-| **Without Personnel (11, 12, 21 personnel)** | 0.2152 | +0.0001 (Negligible) | Personnel usage shares showed no measurable improvement over Massey in this sample. |
-| **Without Defensive Front (3-4 vs 4-3 vs nickel+)** | 0.2152 | +0.0001 (Negligible) | Partially tested: the M2 verdict covers front only through the personnel-vs-front term (`matchup-models.ts:316`); it does not test front alignment beyond that (this row disables the same shared term as the personnel ablation, so the Brier value is identical). |
+| **Without Personnel (11, 12, 21 personnel) — ablates the shared personnel-vs-front term** | 0.2152 | +0.0001 (Negligible) | **Shares its ablated term with the row below; personnel and front were not tested separately.** Removing the personnel-vs-front term changed the Brier by +0.0001 (negligible); this row does not isolate personnel's contribution. |
+| **Without Defensive Front (3-4 vs 4-3 vs nickel+) — ablates the same shared term** | 0.2152 | +0.0001 (Negligible) | **Not a front-only test: this row and the one above are the same measurement.** `ablateFront` and `ablatePersonnel` both zero the single personnel-vs-front term (`matchup-models.ts:241`, `:316`), which is why the Briers are identical. The M2 verdict covers front only through that term; front alignment beyond it was not tested. |
 
 ### Component-by-Component Findings:
 1. **Man vs Zone Coverage:** In theory, quarterbacks exhibit distinct efficiency profiles against man vs zone. In practice, defensive coordinators alter coverage distribution on a game-plan basis, and pass-play sample sizes (~25-35 pass plays per week) are too small to reliably project weekly matchups.
 2. **Cover 2 and Cover 3 Mix — NOT TESTED:** Charted coverage tags account for ~49% of snaps, but `calculateM2Adjustment` does not read the Cover-2/3 counters (they are written and never consumed), so this backtest is silent on whether Cover 2 or Cover 3 matchups matter. Testing that hypothesis would require a new, separately pre-registered candidate with its own holdout run.
-3. **11 Personnel, 12 Personnel, 21 Personnel:** Nearly all NFL offenses operate out of 11 personnel 60–75% of the time. The marginal variance between 11, 12, and 21 personnel packages showed no measurable improvement out-of-sample in this backtest.
-4. **3-4 vs 4-3 Base Fronts:** Modern defenses play nickel or dime (5+ defensive backs) on over 65% of snaps. In this backtest the M2 verdict covers defensive front only through the personnel-vs-front term; front alignment beyond that was not tested (see §4).
+3. **11 Personnel, 12 Personnel, 21 Personnel:** In this repo's own 2025 prior-season data, 11 personnel accounted for 58.8% of charted regular-season snaps league-wide (19,278 of 32,813; summed across all 32 teams from `src/data/teamStats.json`, field `teams[*].priorSeason.offensivePersonnel.p11.plays`). The marginal variance between 11, 12, and 21 personnel packages showed no measurable improvement out-of-sample in this backtest.
+4. **3-4 vs 4-3 Base Fronts:** In the same data, defenses aligned with 5+ defensive backs (nickel, dime, quarter packages) on 69.0% of charted regular-season snaps (22,649 of 32,813; `src/data/teamStats.json`, field `teams[*].priorSeason.defensiveFront.nickelPlus.plays`). In this backtest the M2 verdict covers defensive front only through the personnel-vs-front term; front alignment beyond that was not tested (see §4).
 
 ---
 
@@ -161,8 +161,8 @@ To evaluate the specific sub-dimensions requested by the user, we isolated and a
 
 ---
 
-## 7. Recommendation for Task 027
+## 7. Recommendation
 
 **Do not wire unit efficiency, scheme tendencies, or red zone splits into the live prediction engine.**
 The empirical evidence indicates intervals straddling zero for M2 and M3 and worse calibration for M1 in this sample; across candidates, additions did not meet the pre-registered adoption criteria (failures on at least one criterion). The Massey least-squares decision engine remains the best-performing candidate tested here and stays the decision core. The null findings in this sample should not be interpreted as proof that the tested scheme effects do not exist; only that no measurable improvement was detected under the tested design.
-Task 027 should treat unit stats and scheme priors as **contextual descriptive displays and narrative drivers** for user analysis, rather than margin modifiers that corrupt prediction accuracy.
+Unit stats and scheme priors are therefore kept as **contextual descriptive displays and narrative drivers** for user analysis, not as margin modifiers: no measurable improvement was detected on the 328-game pooled holdout and the paired-Brier improvement intervals straddle zero. The engine surfaces these factors as display-only context in the analysis views; projected margins are invariant to them.

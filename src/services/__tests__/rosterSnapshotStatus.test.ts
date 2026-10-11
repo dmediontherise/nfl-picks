@@ -46,3 +46,9 @@ describe('loadRosterSnapshotWithStatus stale / malformed degradation (Task 031)'
     expect(result).toEqual({ snapshot: null, isStale: false });
   });
 });
+
+describe('loadRosterSnapshotWithStatus null contract (Task 035)', () => {
+  test('null input returns { snapshot: null, isStale: false }', () => {
+    expect(loadRosterSnapshotWithStatus(null)).toEqual({ snapshot: null, isStale: false });
+  });
+});

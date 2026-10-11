@@ -91,9 +91,28 @@ describe('StatComparison render (Task 031)', () => {
     );
 
     expect(screen.getByText(/Does not affect pick/)).toBeInTheDocument();
+    expect(screen.queryByText('Snapshot is stale (>7d)')).not.toBeInTheDocument();
 
     const text = (container.textContent || '').replace(/\s+/g, ' ');
     expect(text).toContain('BUF pass offense #2 vs KC pass defense #1');
     expect(text).toContain('KC pass offense #1 vs BUF pass defense #2');
+  });
+});
+
+describe('StatComparison stale badge (Task 035)', () => {
+  test('a 32-team fixture older than the staleness window shows "Snapshot is stale (>7d)"', () => {
+    const units: Record<string, UnitFixture> = {};
+    for (const abbr of NFL_TEAM_ABBREVIATIONS) {
+      units[abbr] = { passOff: 0, rushOff: 0, passDef: 0, rushDef: 0 };
+    }
+    const snapshot = buildSnapshot(units);
+    // 8 days old: past the 7-day window loadTeamStats uses (teamStats.ts:436-438).
+    snapshot.fetchedAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+
+    render(
+      <StatComparison homeTeamAbbr="KC" awayTeamAbbr="BUF" customTeamStats={snapshot} />
+    );
+
+    expect(screen.getByText('Snapshot is stale (>7d)')).toBeInTheDocument();
   });
 });
