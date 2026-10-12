@@ -1,0 +1,35 @@
+name: Snapshot NFL Season Results
+
+'on':
+  schedule:
+    - cron: '0 9 * * 1,2,5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages-publish
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch season results snapshot
+        run: npm run snapshot:results
+
+      - name: Build and publish site if snapshot changed
+        run: 'bash scripts/publish-docs.sh src/data/seasonResults.json "chore(data): update season results snapshot [skip ci]"'
