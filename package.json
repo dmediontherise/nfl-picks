@@ -14,6 +14,7 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "test:research": "npx tsx research/tests/index.ts",
+    "test:scripts": "npx tsx scripts/__tests__/nflverse.test.ts && npx tsx scripts/__tests__/ftnJoinCoverage.test.ts",
     "snapshot:roster": "tsx scripts/fetch-roster-snapshot.ts",
     "snapshot:teamstats": "tsx scripts/fetch-team-stats.ts",
     "eject": "react-scripts eject",

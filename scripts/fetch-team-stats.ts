@@ -20,10 +20,15 @@ import {
 } from '../src/data/teamStats';
 import {
   CoverageCounts,
+  FTN_MAX_MISSING_GAME_PCT,
+  FTN_MIN_JOIN_INTEGRITY_PCT,
   RedZoneDriveTracker,
+  ScrimmageGameJoin,
+  assertFtnCoverage,
   computeCoverageShares,
   createEmptyCoverageCounts,
   downloadNflverseFile,
+  evaluateFtnCoverage,
   parseCsvObjects,
   recordCoveragePlay,
   summarizeRedZoneDrives,
@@ -49,7 +54,7 @@ function round(n: number, d = 4): number {
   return Math.round(n * 10 ** d) / 10 ** d;
 }
 
-interface RawFtnRow {
+export interface RawFtnRow {
   nflverse_game_id?: string;
   nflverse_play_id?: string;
   n_blitzers?: string;
@@ -58,7 +63,7 @@ interface RawFtnRow {
   is_motion?: string;
 }
 
-interface RawPbpRow {
+export interface RawPbpRow {
   game_id: string;
   play_id: string;
   season_type: string;
@@ -99,7 +104,7 @@ interface RawParticipationRow {
   defense_coverage_type: string;
 }
 
-class UnitStatsAccumulator {
+export class UnitStatsAccumulator {
   totalPlays = 0;
   totalEpa = 0;
   successes = 0;
@@ -134,6 +139,7 @@ class UnitStatsAccumulator {
   playActionOpportunities = 0;
   motionPlays = 0;
   box8PlusPlays = 0;
+  ftnPlays = 0;
 
   addPlay(
     row: RawPbpRow,
@@ -190,8 +196,10 @@ class UnitStatsAccumulator {
       this.goalToGoEpa += epa;
     }
 
-    // FTN metrics
+    // FTN metrics: only matched plays count. Unmatched plays (ftn === undefined) never
+    // touch an FTN numerator or denominator.
     if (ftn) {
+      this.ftnPlays++;
       const blitzers = parseInt(ftn.n_blitzers || '0', 10);
       if (isPass || isDropback) {
         this.blitzOpportunities++;
@@ -252,8 +260,8 @@ class UnitStatsAccumulator {
       this.playActionOpportunities > 0
         ? round(this.playActionPlays / this.playActionOpportunities)
         : 0;
-    const motionRate = this.totalPlays > 0 ? round(this.motionPlays / this.totalPlays) : 0;
-    const box8PlusRate = this.totalPlays > 0 ? round(this.box8PlusPlays / this.totalPlays) : 0;
+    const motionRate = this.ftnPlays > 0 ? round(this.motionPlays / this.ftnPlays) : 0;
+    const box8PlusRate = this.ftnPlays > 0 ? round(this.box8PlusPlays / this.ftnPlays) : 0;
 
     return {
       epaPerPlay,
@@ -300,6 +308,7 @@ class UnitStatsAccumulator {
         motionPlays: this.motionPlays,
         box8PlusRate,
         box8PlusPlays: this.box8PlusPlays,
+        ftnPlays: this.ftnPlays,
       },
     };
   }
@@ -308,18 +317,23 @@ class UnitStatsAccumulator {
 async function compute2026CurrentStats(): Promise<{
   teamsCurrent: Record<NFLTeamAbbreviation, { gamesPlayed: number; offense: UnitEfficiencyStats; defense: UnitEfficiencyStats }>;
   leagueAverage: { offense: UnitEfficiencyStats; defense: UnitEfficiencyStats };
-  joinCoveragePct: number;
+  ftnJoinCoveragePct: number;
+  ftnGamesCovered: number;
+  ftnGamesMissing: { count: number; gameIds: string[] };
+  ftnJoinIntegrityPct: number;
 }> {
   console.log('Downloading FTN 2026 charting data...');
   const ftnStream = await downloadNflverseFile(FTN_2026_URL);
   const ftnMap = new Map<string, RawFtnRow>();
+  const ftnGameIds = new Set<string>();
 
   for await (const row of parseCsvObjects<RawFtnRow>(ftnStream)) {
     if (row.nflverse_game_id && row.nflverse_play_id) {
       ftnMap.set(`${row.nflverse_game_id}_${row.nflverse_play_id}`, row);
+      ftnGameIds.add(row.nflverse_game_id);
     }
   }
-  console.log(`Loaded ${ftnMap.size} FTN records.`);
+  console.log(`Loaded ${ftnMap.size} FTN records across ${ftnGameIds.size} games.`);
 
   console.log('Downloading PBP 2026 play-by-play data...');
   const pbpStream = await downloadNflverseFile(PBP_2026_URL);
@@ -340,8 +354,8 @@ async function compute2026CurrentStats(): Promise<{
     defAcc.set(abbr, new UnitStatsAccumulator());
   }
 
-  let totalScrimmage = 0;
-  let matchedFtn = 0;
+  const gameScrimmagePlays = new Map<string, number>();
+  const gameMatchedPlays = new Map<string, number>();
 
   for await (const row of parseCsvObjects<RawPbpRow>(pbpStream)) {
     if (row.season_type !== 'REG') continue;
@@ -367,10 +381,12 @@ async function compute2026CurrentStats(): Promise<{
     teamGames.get(offTeam)!.add(row.game_id);
     teamGames.get(defTeam)!.add(row.game_id);
 
-    totalScrimmage++;
+    gameScrimmagePlays.set(row.game_id, (gameScrimmagePlays.get(row.game_id) || 0) + 1);
     const ftnKey = `${row.game_id}_${row.play_id}`;
     const ftnRow = ftnMap.get(ftnKey);
-    if (ftnRow) matchedFtn++;
+    if (ftnRow) {
+      gameMatchedPlays.set(row.game_id, (gameMatchedPlays.get(row.game_id) || 0) + 1);
+    }
 
     offAcc.get(offTeam)!.addPlay(row, ftnRow, true);
     defAcc.get(defTeam)!.addPlay(row, ftnRow, false);
@@ -390,16 +406,33 @@ async function compute2026CurrentStats(): Promise<{
     }
   }
 
-  const joinCoveragePct = totalScrimmage > 0 ? (matchedFtn / totalScrimmage) * 100 : 0;
-  console.log(
-    `FTN join coverage: ${matchedFtn}/${totalScrimmage} scrimmage plays (${joinCoveragePct.toFixed(2)}%)`
+  const games: ScrimmageGameJoin[] = Array.from(gameScrimmagePlays.entries()).map(
+    ([gameId, scrimmagePlays]) => ({
+      gameId,
+      scrimmagePlays,
+      matchedPlays: gameMatchedPlays.get(gameId) || 0,
+      hasFtnRows: ftnGameIds.has(gameId),
+    })
   );
 
-  if (joinCoveragePct < 90) {
-    throw new Error(
-      `FTN join coverage regression: ${joinCoveragePct.toFixed(2)}% is below 90% threshold.`
-    );
+  const coverage = evaluateFtnCoverage(games);
+
+  console.log(
+    `FTN join integrity: ${coverage.ftnJoinIntegrityPct.toFixed(2)}% of scrimmage plays matched ` +
+      `in ${coverage.coveredGames}/${coverage.totalGames} FTN-covered games ` +
+      `(${FTN_MIN_JOIN_INTEGRITY_PCT}% required).`
+  );
+  console.log(
+    `FTN freshness: ${coverage.missingGames.count}/${coverage.totalGames} regular-season games ` +
+      `(${coverage.missingGamePct.toFixed(2)}%) have no FTN rows ` +
+      `(<= ${FTN_MAX_MISSING_GAME_PCT}% allowed).`
+  );
+
+  for (const warning of coverage.warnings) {
+    console.warn(warning);
   }
+
+  assertFtnCoverage(coverage);
 
   const teamsCurrent: Record<
     NFLTeamAbbreviation,
@@ -427,7 +460,14 @@ async function compute2026CurrentStats(): Promise<{
     defense: leagueDefAcc.finalize(leagueDefRz),
   };
 
-  return { teamsCurrent, leagueAverage, joinCoveragePct: round(joinCoveragePct, 2) };
+  return {
+    teamsCurrent,
+    leagueAverage,
+    ftnJoinCoveragePct: round(coverage.ftnJoinCoveragePct, 2),
+    ftnGamesCovered: coverage.coveredGames,
+    ftnGamesMissing: coverage.missingGames,
+    ftnJoinIntegrityPct: round(coverage.ftnJoinIntegrityPct, 2),
+  };
 }
 
 async function compute2025PriorScheme(): Promise<Record<NFLTeamAbbreviation, TeamPriorSeasonStats>> {
@@ -677,7 +717,14 @@ export async function run(): Promise<void> {
     const refreshPrior = process.argv.includes('--refresh-prior');
 
     // 1. Current season 2026 stats
-    const { teamsCurrent, leagueAverage, joinCoveragePct } = await compute2026CurrentStats();
+    const {
+      teamsCurrent,
+      leagueAverage,
+      ftnJoinCoveragePct,
+      ftnGamesCovered,
+      ftnGamesMissing,
+      ftnJoinIntegrityPct,
+    } = await compute2026CurrentStats();
 
     // 2. Prior season 2025 scheme tendencies
     let priorSeasonByTeam: Record<NFLTeamAbbreviation, TeamPriorSeasonStats> | null = null;
@@ -737,7 +784,10 @@ export async function run(): Promise<void> {
       fetchedAt: new Date().toISOString(),
       season: 2026,
       dataAttribution: DATA_ATTRIBUTION,
-      ftnJoinCoveragePct: joinCoveragePct,
+      ftnJoinCoveragePct,
+      ftnGamesCovered,
+      ftnGamesMissing,
+      ftnJoinIntegrityPct,
       leagueAverage,
       teams: teamsObj,
     };
