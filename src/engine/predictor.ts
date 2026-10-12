@@ -185,6 +185,9 @@ export function predictGame(input: PredictionInput): Prediction {
   const p: number[] = Array(n).fill(0);
 
   for (const g of history) {
+    const weight = g.weight !== undefined ? g.weight : 1;
+    if (weight <= 0) continue;
+
     if (!g.homeAbbr || !g.awayAbbr) continue;
     const hIdx = teamIndex[g.homeAbbr];
     const aIdx = teamIndex[g.awayAbbr];
@@ -205,13 +208,13 @@ export function predictGame(input: PredictionInput): Prediction {
     const hfaG = g.isNeutralSite ? 0 : DEFAULT_HFA;
     const diff = (g.homeScore - g.awayScore) - hfaG;
 
-    M[hIdx][hIdx] += 1;
-    M[aIdx][aIdx] += 1;
-    M[hIdx][aIdx] -= 1;
-    M[aIdx][hIdx] -= 1;
+    M[hIdx][hIdx] += weight;
+    M[aIdx][aIdx] += weight;
+    M[hIdx][aIdx] -= weight;
+    M[aIdx][hIdx] -= weight;
 
-    p[hIdx] += diff;
-    p[aIdx] -= diff;
+    p[hIdx] += weight * diff;
+    p[aIdx] -= weight * diff;
   }
 
   // Ridge Regularization (lambda = 2.0)

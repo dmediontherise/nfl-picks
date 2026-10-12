@@ -502,6 +502,68 @@ describe('Team Stats Snapshot Data Layer', () => {
     });
   });
 
+  describe('Task 050: TeamCurrentTendencies, priorSeasonTendencies and currentScheme validation', () => {
+    const validTendencies = () => ({
+      formation: {
+        shotgun: { share: 0.65, plays: 130 },
+        underCenter: { share: 0.3, plays: 60 },
+        pistol: { share: 0.05, plays: 10 },
+      },
+      playAction: { share: 0.2, plays: 40 },
+      motion: { share: 0.5, plays: 100 },
+      noHuddle: { share: 0.08, plays: 16 },
+      screen: { share: 0.1, plays: 20 },
+      rpo: { share: 0.12, plays: 24 },
+      box8Plus: { share: 0.18, plays: 36 },
+      blitz: { share: 0.25, plays: 50 },
+      passRushersMean: { mean: 4.2, plays: 140 },
+    });
+
+    it('validates a snapshot with current.tendencies, priorSeasonTendencies and currentScheme successfully', () => {
+      const snap = createValidSnapshot();
+      const kc = snap.teams['KC'];
+      kc.current.tendencies = validTendencies();
+      kc.priorSeasonTendencies = validTendencies();
+      kc.currentScheme = { ...kc.priorSeason, season: 2026 };
+
+      const validation = validateTeamStats(snap);
+      expect(validation.valid).toBe(true);
+      expect(validation.errors).toHaveLength(0);
+    });
+
+    it('validates an old snapshot without tendencies, priorSeasonTendencies or currentScheme (backwards compatibility)', () => {
+      const snap = createValidSnapshot();
+      for (const abbr of NFL_TEAM_ABBREVIATIONS) {
+        delete snap.teams[abbr].current.tendencies;
+        delete (snap.teams[abbr] as any).priorSeasonTendencies;
+        delete (snap.teams[abbr] as any).currentScheme;
+      }
+      const validation = validateTeamStats(snap);
+      expect(validation.valid).toBe(true);
+      expect(validation.errors).toHaveLength(0);
+    });
+
+    it('rejects invalid tendencies, priorSeasonTendencies or currentScheme structure', () => {
+      const snap = createValidSnapshot();
+      (snap.teams['KC'] as any).currentScheme = 'not-an-object';
+      let validation = validateTeamStats(snap);
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('Invalid currentScheme for team KC (expected object)');
+
+      snap.teams['KC'].currentScheme = undefined;
+      (snap.teams['KC'].current as any).tendencies = 'not-an-object';
+      validation = validateTeamStats(snap);
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('Invalid tendencies object for KC current.tendencies');
+
+      (snap.teams['KC'].current as any).tendencies = validTendencies();
+      (snap.teams['KC'] as any).priorSeasonTendencies = { formation: {} };
+      validation = validateTeamStats(snap);
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('Invalid playAction tendency for KC priorSeasonTendencies');
+    });
+  });
+
   describe('Requirement 9: Data Attribution Constant', () => {
     it('exports DATA_ATTRIBUTION referencing nflverse and FTN Data CC-BY-SA 4.0', () => {
       expect(DATA_ATTRIBUTION).toContain('nflverse');
@@ -510,3 +572,4 @@ describe('Team Stats Snapshot Data Layer', () => {
     });
   });
 });
+

@@ -6,6 +6,7 @@ import { predictGame, buildNarrative, PredictionInput, HistoricalGame, Narrative
 import seasonData from '../engine/data/historical-season.json';
 import { calculateExplosiveRating, calculateExecutionRating, calculateQBLeverage, calculateUnitLeverage } from './displayMetrics';
 import { loadRosterSnapshot, RosterSnapshot, RosterPlayer, detectDisplacedStarters } from '../data/rosterSnapshot';
+import { loadSeasonResults } from '../data/seasonResults';
 
 const getTeamData = (team: Team) => {
   const staticData = TEAMS[team.abbreviation] || { tier: 3, offRating: 75, defRating: 75, status: "Bubble", keyInjuries: [] };
@@ -194,21 +195,70 @@ export function getTeamInjuriesForEngine(snapshot: RosterSnapshot | null | undef
   return injuries;
 }
 
-// Pure history builder function filtering games kicking off strictly before kickoffISO
-export function buildPredictionHistory(seasonGames: any[], kickoffISO?: string): HistoricalGame[] {
+/**
+ * Calculate prior season (2025) carryover weight for current season (2026) game.
+ * Uses decay_4 chosen schedule: max(0, 1 - (k - 1) / 4).
+ * Postseason (seasonType === 3 or week > 18) counts as after week 18 (k > 18 -> weight 0).
+ */
+export function getPriorSeasonWeight(targetWeek?: number, seasonType?: number): number {
+  if (seasonType === 3) return 0;
+  const k = targetWeek !== undefined ? targetWeek : 1;
+  if (k > 18) return 0;
+  return Math.max(0, 1 - (k - 1) / 4);
+}
+
+// History builder combining prior season (weighted) and current season (weight 1)
+export function buildPredictionHistory(
+  priorGames: any[],
+  currentGames: any[],
+  kickoffISO?: string,
+  targetWeek?: number,
+  seasonType?: number
+): HistoricalGame[] {
   const kickoffTime = kickoffISO ? new Date(kickoffISO).getTime() : Infinity;
-  return (seasonGames || [])
-    .filter((g: any) => g.date && new Date(g.date).getTime() < kickoffTime)
-    .map((g: any) => ({
-      homeAbbr: g.homeAbbr,
-      awayAbbr: g.awayAbbr,
-      homeScore: g.homeScore,
-      awayScore: g.awayScore,
-      isNeutralSite: g.neutralSite,
-      date: g.date,
-      seasonType: g.seasonType,
-      week: g.week
-    }));
+  const wPrior = getPriorSeasonWeight(targetWeek, seasonType);
+
+  const history: HistoricalGame[] = [];
+
+  // Prior season games (2025)
+  if (Array.isArray(priorGames)) {
+    for (const g of priorGames) {
+      if (g.date && new Date(g.date).getTime() < kickoffTime) {
+        history.push({
+          homeAbbr: g.homeAbbr,
+          awayAbbr: g.awayAbbr,
+          homeScore: g.homeScore,
+          awayScore: g.awayScore,
+          isNeutralSite: g.neutralSite,
+          date: g.date,
+          seasonType: g.seasonType,
+          week: g.week,
+          weight: wPrior,
+        });
+      }
+    }
+  }
+
+  // Current season games (2026) with weight 1.0
+  if (Array.isArray(currentGames)) {
+    for (const g of currentGames) {
+      if (g.date && new Date(g.date).getTime() < kickoffTime) {
+        history.push({
+          homeAbbr: g.homeAbbr,
+          awayAbbr: g.awayAbbr,
+          homeScore: g.homeScore,
+          awayScore: g.awayScore,
+          isNeutralSite: g.neutralSite,
+          date: g.date,
+          seasonType: g.seasonType,
+          week: g.week,
+          weight: 1.0,
+        });
+      }
+    }
+  }
+
+  return history;
 }
 
 // Cache for analysis results to respect the 15-minute rule
@@ -294,7 +344,14 @@ export const analyzeMatchup = async (game: Game, forceRefresh: boolean = false, 
 
   // Build history strictly prior to the game kickoff
   const gameKickoff = game.date || (game as any).dateISO;
-  const history = buildPredictionHistory(seasonData.games, gameKickoff);
+  const currentSeasonGames = loadSeasonResults();
+  const history = buildPredictionHistory(
+    seasonData.games,
+    currentSeasonGames,
+    gameKickoff,
+    game.week,
+    game.seasonType
+  );
 
   const input: PredictionInput = {
     game: {

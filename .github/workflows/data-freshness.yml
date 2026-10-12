@@ -1,0 +1,97 @@
+name: Check Data Freshness and Alert
+
+'on':
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-freshness:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run freshness check
+        id: freshness
+        run: |
+          set +e
+          OUTPUT=$(npm run check:freshness 2>&1)
+          EXIT_CODE=$?
+          echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+          # Store multi-line output in step output
+          {
+            echo "cli_output<<EOF"
+            echo "${OUTPUT}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "${OUTPUT}"
+          exit 0
+
+      - name: Manage GitHub issue on failure
+        if: steps.freshness.outputs.exit_code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLI_OUTPUT: ${{ steps.freshness.outputs.cli_output }}
+        run: |
+          # Parse failed components from output or summary
+          FAILED_NAMES=$(echo "${CLI_OUTPUT}" | grep -oE "\[FAIL\] +[a-zA-Z0-9_-]+" | awk '{print $2}' | tr '\n' ', ' | sed 's/, $//')
+          if [ -z "${FAILED_NAMES}" ]; then
+            FAILED_NAMES="components"
+          fi
+
+          ISSUE_TITLE="Stale data: ${FAILED_NAMES}"
+          LABEL="stale-data"
+
+          BODY=$(cat <<EOF
+          ### Stale Data Alert
+
+          The daily data freshness check detected stale data or published build assets.
+
+          \`\`\`
+          ${CLI_OUTPUT}
+          \`\`\`
+          EOF
+          )
+
+          # Find existing open issue with stale-data label
+          EXISTING_ISSUE=$(gh issue list --state open --label "${LABEL}" --json number --jq '.[0].number')
+
+          if [ -n "${EXISTING_ISSUE}" ]; then
+            echo "Existing open issue #${EXISTING_ISSUE} found. Adding comment..."
+            gh issue comment "${EXISTING_ISSUE}" --body "${BODY}"
+          else
+            echo "No existing open issue found. Creating new issue with label ${LABEL}..."
+            gh issue create --title "${ISSUE_TITLE}" --body "${BODY}" --label "${LABEL}"
+          fi
+
+          # Fail step so workflow run fails and GitHub notification fires
+          exit 1
+
+      - name: Close GitHub issue on success
+        if: steps.freshness.outputs.exit_code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LABEL="stale-data"
+          EXISTING_ISSUES=$(gh issue list --state open --label "${LABEL}" --json number --jq '.[].number')
+
+          for ISSUE_NUM in ${EXISTING_ISSUES}; do
+            echo "Closing stale data issue #${ISSUE_NUM}..."
+            gh issue comment "${ISSUE_NUM}" --body "Data freshness check passed. All data and published assets are fresh."
+            gh issue close "${ISSUE_NUM}"
+          done

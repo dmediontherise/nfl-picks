@@ -905,5 +905,117 @@ describe('Prediction Engine (src/engine/predictor.ts)', () => {
       expect(pred.spreadPick.team).toBe('H');
       expect(pred.spreadPick.edge).toBe(0);
     });
+
+    test('Req 044-1: with every weight absent or 1, predictions are bit-identical, and weight 0 contributes nothing', () => {
+      const fixedHistory: HistoricalGame[] = [
+        { homeAbbr: 'KC', awayAbbr: 'BAL', homeScore: 27, awayScore: 20, isNeutralSite: false },
+        { homeAbbr: 'PHI', awayAbbr: 'GB', homeScore: 34, awayScore: 29, isNeutralSite: true },
+        { homeAbbr: 'BUF', awayAbbr: 'MIA', homeScore: 31, awayScore: 10, isNeutralSite: false },
+      ];
+
+      const inputUnweighted: PredictionInput = {
+        game: {
+          homeAbbr: 'KC',
+          awayAbbr: 'BUF',
+          isNeutralSite: false,
+          market: { spread: -2.5, total: 47.5 }
+        },
+        history: fixedHistory
+      };
+
+      const inputWeight1: PredictionInput = {
+        game: {
+          homeAbbr: 'KC',
+          awayAbbr: 'BUF',
+          isNeutralSite: false,
+          market: { spread: -2.5, total: 47.5 }
+        },
+        history: fixedHistory.map(g => ({ ...g, weight: 1 }))
+      };
+
+      const predUnweighted = predictGame(inputUnweighted);
+      const predWeight1 = predictGame(inputWeight1);
+
+      expect(predWeight1).toEqual(predUnweighted);
+
+      // Golden literals captured from pre-044 predictor.ts (git show HEAD:src/engine/predictor.ts)
+      // for the above fixed fixture: projectedMargin: -1.5, homeWinProbability: 0.4466.
+      expect(predUnweighted.projectedMargin).toBe(-1.5);
+      expect(predUnweighted.homeWinProbability).toBe(0.4466);
+      expect(predWeight1.projectedMargin).toBe(-1.5);
+      expect(predWeight1.homeWinProbability).toBe(0.4466);
+
+      // Weight 0 test: adding a game with weight 0 does not change predictions
+      const inputWeight0: PredictionInput = {
+        game: {
+          homeAbbr: 'KC',
+          awayAbbr: 'BUF',
+          isNeutralSite: false,
+          market: { spread: -2.5, total: 47.5 }
+        },
+        history: [
+          ...fixedHistory,
+          { homeAbbr: 'KC', awayAbbr: 'BUF', homeScore: 100, awayScore: 0, weight: 0 }
+        ]
+      };
+
+      const predWeight0 = predictGame(inputWeight0);
+      expect(predWeight0).toEqual(predUnweighted);
+      expect(predWeight0.projectedMargin).toBe(-1.5);
+      expect(predWeight0.homeWinProbability).toBe(0.4466);
+    });
+
+    test('Req 048-1: fractional weights produce identical predictions when split (2x 0.5 vs 1x 1.0) and lie strictly between weight 0 and 1', () => {
+      // Connect KC and BAL through DET and MIN with balanced scoring (22-22) so game count driver counts do not differ
+      const baseHistory: HistoricalGame[] = [
+        { homeAbbr: 'KC', awayAbbr: 'DET', homeScore: 22, awayScore: 22, isNeutralSite: false },
+        { homeAbbr: 'BAL', awayAbbr: 'MIN', homeScore: 22, awayScore: 22, isNeutralSite: false },
+      ];
+
+      const testGame: HistoricalGame = {
+        homeAbbr: 'DET',
+        awayAbbr: 'MIN',
+        homeScore: 22,
+        awayScore: 22,
+        isNeutralSite: false,
+      };
+
+      const gameToPredict = {
+        homeAbbr: 'KC',
+        awayAbbr: 'BAL',
+        isNeutralSite: false,
+      };
+
+      // 1. A game appearing twice at weight 0.5 is deeply equal to the same history with that game once at weight 1
+      const predOnceAt1 = predictGame({
+        game: gameToPredict,
+        history: [...baseHistory, { ...testGame, weight: 1 }],
+      });
+
+      const predTwiceAtHalf = predictGame({
+        game: gameToPredict,
+        history: [...baseHistory, { ...testGame, weight: 0.5 }, { ...testGame, weight: 0.5 }],
+      });
+
+      expect(predTwiceAtHalf).toEqual(predOnceAt1);
+
+      // 2. The same game at weight 0.5 gives a projectedMargin strictly between weight-0 and weight-1 results
+      const predWeight0 = predictGame({
+        game: gameToPredict,
+        history: [...baseHistory, { ...testGame, weight: 0 }],
+      });
+
+      const predWeightHalf = predictGame({
+        game: gameToPredict,
+        history: [...baseHistory, { ...testGame, weight: 0.5 }],
+      });
+
+      const m0 = predWeight0.projectedMargin;
+      const mHalf = predWeightHalf.projectedMargin;
+      const m1 = predOnceAt1.projectedMargin;
+
+      const isStrictlyBetween = (mHalf > m0 && mHalf < m1) || (mHalf < m0 && mHalf > m1);
+      expect(isStrictlyBetween).toBe(true);
+    });
   });
 });

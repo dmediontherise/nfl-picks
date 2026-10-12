@@ -59,6 +59,8 @@ export function computeUnitRanks(snapshot: TeamStatsSnapshot): Record<string, Un
   return ranks;
 }
 
+export const SMALL_SAMPLE_THRESHOLD = 50;
+
 const StatComparison: React.FC<StatComparisonProps> = ({
   homeColor = '#3b82f6',
   awayColor = '#f97316',
@@ -86,9 +88,170 @@ const StatComparison: React.FC<StatComparisonProps> = ({
 
   const formatPct = (val?: number) => (val !== undefined ? `${(val * 100).toFixed(1)}%` : '—');
 
-  // Coverage tendency: zone share from 2025 prior-season
-  const homeZoneShare = homeStats.priorSeason?.coverage?.zone?.share;
-  const awayZoneShare = awayStats.priorSeason?.coverage?.zone?.share;
+  // Participation-only scheme tendency sources (currentScheme if present, else priorSeason)
+  const homeScheme = homeStats.currentScheme || homeStats.priorSeason;
+  const awayScheme = awayStats.currentScheme || awayStats.priorSeason;
+  const homeSchemeIs2026 = Boolean(homeStats.currentScheme);
+  const awaySchemeIs2026 = Boolean(awayStats.currentScheme);
+
+  // Coverage tendency: zone share
+  const homeActiveCoverage = homeScheme?.coverage;
+  const awayActiveCoverage = awayScheme?.coverage;
+  const homeCoverageIs2026 = homeSchemeIs2026;
+  const awayCoverageIs2026 = awaySchemeIs2026;
+
+  // 2025 FTN+PBP baseline for the FTN-derived tendency rows. Falls back to the
+  // participation-only priorSeason formation shotgun when priorSeasonTendencies is
+  // absent (snapshots predating that field still render a baseline where possible).
+  const homeTendPrior = homeStats.priorSeasonTendencies;
+  const awayTendPrior = awayStats.priorSeasonTendencies;
+  const homeShotgunPrior =
+    homeTendPrior?.formation?.shotgun ?? homeStats.priorSeason?.formation?.shotgun;
+  const awayShotgunPrior =
+    awayTendPrior?.formation?.shotgun ?? awayStats.priorSeason?.formation?.shotgun;
+
+  // Helpers to get top personnel and front label and samples
+  const getTopPersonnel = (scheme?: typeof homeScheme) => {
+    if (!scheme?.offensivePersonnel?.topPersonnelEpa?.length) return '—';
+    const top = scheme.offensivePersonnel.topPersonnelEpa[0];
+    const groupName = top.group === 'other' ? 'Other' : `${top.group} Personnel`;
+    return `${groupName} (${(top.share * 100).toFixed(0)}%)`;
+  };
+
+  const getTopPersonnelDetails = (scheme?: typeof homeScheme) => {
+    if (!scheme?.offensivePersonnel?.topPersonnelEpa?.length) return null;
+    const top = scheme.offensivePersonnel.topPersonnelEpa[0];
+    const groupName = top.group === 'other' ? 'Other' : `${top.group} Personnel`;
+    return {
+      label: `${groupName} (${(top.share * 100).toFixed(0)}%)`,
+      plays: top.plays,
+      totalPlays: scheme.totalPlays,
+    };
+  };
+
+  const getTopFront = (scheme?: typeof homeScheme) => {
+    if (!scheme?.defensiveFront) return '—';
+    const { f43, f34, nickelPlus } = scheme.defensiveFront;
+    const candidates = [
+      { name: 'Nickel+', share: nickelPlus?.share ?? 0, plays: nickelPlus?.plays ?? 0 },
+      { name: '4-3 Front', share: f43?.share ?? 0, plays: f43?.plays ?? 0 },
+      { name: '3-4 Front', share: f34?.share ?? 0, plays: f34?.plays ?? 0 },
+    ];
+    candidates.sort((a, b) => b.share - a.share);
+    const top = candidates[0];
+    return `${top.name} (${(top.share * 100).toFixed(0)}%)`;
+  };
+
+  const getTopFrontDetails = (scheme?: typeof homeScheme) => {
+    if (!scheme?.defensiveFront) return null;
+    const { f43, f34, nickelPlus } = scheme.defensiveFront;
+    const candidates = [
+      { name: 'Nickel+', share: nickelPlus?.share ?? 0, plays: nickelPlus?.plays ?? 0 },
+      { name: '4-3 Front', share: f43?.share ?? 0, plays: f43?.plays ?? 0 },
+      { name: '3-4 Front', share: f34?.share ?? 0, plays: f34?.plays ?? 0 },
+    ];
+    candidates.sort((a, b) => b.share - a.share);
+    const top = candidates[0];
+    return {
+      label: `${top.name} (${(top.share * 100).toFixed(0)}%)`,
+      plays: top.plays,
+      totalPlays: scheme.totalPlays,
+    };
+  };
+
+  // Helper to render a 2026 tendency cell: 2026 with sample and muted 2025 baseline
+  const renderTendencyCell = (
+    currentRate?: { share: number; plays: number },
+    priorRate?: { share: number; plays?: number }
+  ) => {
+    if (!currentRate) {
+      // Old snapshot without tendencies block: fallback to priorSeason baseline
+      if (priorRate) {
+        return (
+          <div className="flex flex-col">
+            <span className="text-slate-300">{formatPct(priorRate.share)}</span>
+            <span className="text-[10px] text-slate-500 italic">2025 baseline</span>
+          </div>
+        );
+      }
+      return <span className="text-slate-500">—</span>;
+    }
+
+    const { share, plays } = currentRate;
+    const priorPctStr = priorRate !== undefined ? formatPct(priorRate.share) : '—';
+
+    // Small sample rule: plays < SMALL_SAMPLE_THRESHOLD; 2025 becomes the primary figure when a 2025 baseline exists
+    if (plays < SMALL_SAMPLE_THRESHOLD) {
+      return (
+        <div className="flex flex-col">
+          {priorRate !== undefined ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-slate-200 font-semibold">{priorPctStr}</span>
+              <span className="text-[10px] text-slate-500">(2025)</span>
+            </div>
+          ) : (
+            <span className="text-slate-200 font-semibold">—</span>
+          )}
+          <span className="text-[10px] text-amber-400/80">
+            {formatPct(share)} (n={plays}) <span className="italic">small sample</span>
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col">
+        <span className="text-slate-200 font-semibold">
+          {formatPct(share)} <span className="text-[10px] text-slate-400 font-normal">(n={plays})</span>
+        </span>
+        <span className="text-[10px] text-slate-500">
+          2025: {priorPctStr}
+        </span>
+      </div>
+    );
+  };
+
+  // Participation labeled rows (personnel, defensive front)
+  const renderParticipationLabeledCell = (
+    currentDetails: { label: string; plays: number; totalPlays: number } | null,
+    priorLabel: string
+  ) => {
+    if (!currentDetails) {
+      return (
+        <div className="flex flex-col">
+          <span className="text-slate-300">{priorLabel}</span>
+          <span className="text-[10px] text-slate-500 italic">2026 not yet published</span>
+        </div>
+      );
+    }
+
+    const { label, plays, totalPlays } = currentDetails;
+
+    if (totalPlays < SMALL_SAMPLE_THRESHOLD) {
+      return (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-200 font-semibold">{priorLabel}</span>
+            <span className="text-[10px] text-slate-500">(2025)</span>
+          </div>
+          <span className="text-[10px] text-amber-400/80">
+            {label} (n={plays}) <span className="italic">small sample</span>
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col">
+        <span className="text-slate-200 font-semibold">
+          {label} <span className="text-[10px] text-slate-400 font-normal">(n={plays})</span>
+        </span>
+        <span className="text-[10px] text-slate-500">
+          2025: {priorLabel}
+        </span>
+      </div>
+    );
+  };
 
   return (
     <div className="bg-slate-900/60 p-5 rounded-xl border border-slate-700/60 shadow-lg space-y-4">
@@ -112,10 +275,10 @@ const StatComparison: React.FC<StatComparisonProps> = ({
       {/* Explanatory data currency notice */}
       <div className="text-[11px] text-slate-400 bg-slate-950/70 p-2.5 rounded border border-slate-800/80 space-y-1">
         <p>
-          <strong className="text-slate-300">Live 2026 Season Data:</strong> Unit efficiency (EPA ranks), 3rd-down %, red-zone TD rate, and blitz rate.
+          <strong className="text-slate-300">Live 2026 Season Data:</strong> Formation shotgun share, play-action, motion, blitz, and 8+ box rates come from 2026 FTN charting + PBP. Unit efficiency (EPA ranks), 3rd-down %, and red-zone TD rate come from 2026 PBP.
         </p>
         <p>
-          <strong className="text-slate-300">2025 Prior-Season Tendencies:</strong> Scheme tendencies (man/zone coverage, personnel packages, front alignment). Scheme stats reflect 2025 tendencies.
+          <strong className="text-slate-300">2025 Baseline:</strong> The muted 2025 column shows the prior-season value. Formation, play-action, motion, blitz, and 8+ box baselines come from 2025 FTN charting + PBP. Coverage scheme (man/zone), personnel packages, and defensive front alignment are participation-only: they reflect 2025 until 2026 participation data is published, then switch automatically.
         </p>
       </div>
 
@@ -129,9 +292,9 @@ const StatComparison: React.FC<StatComparisonProps> = ({
             <span style={{ color: awayColor }} className="font-bold">{awayTeamAbbr}</span> pass offense #{awayRanks?.passOffense ?? '—'} vs{' '}
             <span style={{ color: homeColor }} className="font-bold">{homeTeamAbbr}</span> pass defense #{homeRanks?.passDefense ?? '—'}
           </div>
-          {homeZoneShare !== undefined && (
+          {homeActiveCoverage?.zone?.share !== undefined && (
             <div className="text-[11px] text-slate-400 mt-1 italic">
-              2025 tendency: {homeTeamAbbr} plays zone {formatPct(homeZoneShare)} of pass snaps
+              {homeCoverageIs2026 ? '2026 tendency' : '2025 tendency'}: {homeTeamAbbr} plays zone {formatPct(homeActiveCoverage.zone.share)} of pass snaps
             </div>
           )}
         </div>
@@ -144,9 +307,9 @@ const StatComparison: React.FC<StatComparisonProps> = ({
             <span style={{ color: homeColor }} className="font-bold">{homeTeamAbbr}</span> pass offense #{homeRanks?.passOffense ?? '—'} vs{' '}
             <span style={{ color: awayColor }} className="font-bold">{awayTeamAbbr}</span> pass defense #{awayRanks?.passDefense ?? '—'}
           </div>
-          {awayZoneShare !== undefined && (
+          {awayActiveCoverage?.zone?.share !== undefined && (
             <div className="text-[11px] text-slate-400 mt-1 italic">
-              2025 tendency: {awayTeamAbbr} plays zone {formatPct(awayZoneShare)} of pass snaps
+              {awayCoverageIs2026 ? '2026 tendency' : '2025 tendency'}: {awayTeamAbbr} plays zone {formatPct(awayActiveCoverage.zone.share)} of pass snaps
             </div>
           )}
         </div>
@@ -197,6 +360,139 @@ const StatComparison: React.FC<StatComparisonProps> = ({
               <td className="py-2">{formatPct(awayStats.current?.defense?.ftn?.blitzRate)}</td>
               <td className="py-2 text-center text-slate-400 font-sans">Defensive Blitz Rate</td>
               <td className="py-2 text-right">{formatPct(homeStats.current?.defense?.ftn?.blitzRate)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Tendencies Table (Task 050: 2026 update over 2025 baseline) */}
+      <div className="overflow-x-auto pt-2 border-t border-slate-800">
+        <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-2">
+          Scheme Tendencies (2026 vs 2025 Baseline)
+        </div>
+        <table className="w-full text-xs text-left border-collapse">
+          <thead>
+            <tr className="border-b border-slate-800 text-[10px] text-slate-500 uppercase font-mono">
+              <th className="py-2 text-left" style={{ color: awayColor }}>{awayTeamAbbr}</th>
+              <th className="py-2 text-center text-slate-400">Tendency</th>
+              <th className="py-2 text-right" style={{ color: homeColor }}>{homeTeamAbbr}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/60 font-mono text-slate-300">
+            {/* 1. Coverage Zone Share */}
+            <tr>
+              <td className="py-2">
+                {awaySchemeIs2026
+                  ? renderTendencyCell(
+                      awayStats.currentScheme?.coverage?.zone,
+                      awayStats.priorSeason?.coverage?.zone
+                    )
+                  : renderTendencyCell(undefined, awayStats.priorSeason?.coverage?.zone)}
+              </td>
+              <td className="py-2 text-center text-slate-400 font-sans">Coverage Zone Share</td>
+              <td className="py-2 text-right">
+                {homeSchemeIs2026
+                  ? renderTendencyCell(
+                      homeStats.currentScheme?.coverage?.zone,
+                      homeStats.priorSeason?.coverage?.zone
+                    )
+                  : renderTendencyCell(undefined, homeStats.priorSeason?.coverage?.zone)}
+              </td>
+            </tr>
+
+            {/* 2. Top Personnel Group */}
+            <tr>
+              <td className="py-2">
+                {renderParticipationLabeledCell(
+                  awaySchemeIs2026 ? getTopPersonnelDetails(awayStats.currentScheme) : null,
+                  getTopPersonnel(awayStats.priorSeason)
+                )}
+              </td>
+              <td className="py-2 text-center text-slate-400 font-sans">Top Personnel Group</td>
+              <td className="py-2 text-right">
+                {renderParticipationLabeledCell(
+                  homeSchemeIs2026 ? getTopPersonnelDetails(homeStats.currentScheme) : null,
+                  getTopPersonnel(homeStats.priorSeason)
+                )}
+              </td>
+            </tr>
+
+            {/* 3. Defensive Front */}
+            <tr>
+              <td className="py-2">
+                {renderParticipationLabeledCell(
+                  awaySchemeIs2026 ? getTopFrontDetails(awayStats.currentScheme) : null,
+                  getTopFront(awayStats.priorSeason)
+                )}
+              </td>
+              <td className="py-2 text-center text-slate-400 font-sans">Defensive Front</td>
+              <td className="py-2 text-right">
+                {renderParticipationLabeledCell(
+                  homeSchemeIs2026 ? getTopFrontDetails(homeStats.currentScheme) : null,
+                  getTopFront(homeStats.priorSeason)
+                )}
+              </td>
+            </tr>
+
+            {/* 4. Formation Shotgun Share */}
+            <tr>
+              <td className="py-2">
+                {renderTendencyCell(
+                  awayStats.current?.tendencies?.formation?.shotgun,
+                  awayShotgunPrior
+                )}
+              </td>
+              <td className="py-2 text-center text-slate-400 font-sans">Formation Shotgun Share</td>
+              <td className="py-2 text-right">
+                {renderTendencyCell(
+                  homeStats.current?.tendencies?.formation?.shotgun,
+                  homeShotgunPrior
+                )}
+              </td>
+            </tr>
+
+            {/* 5. Play-Action */}
+            <tr>
+              <td className="py-2">
+                {renderTendencyCell(awayStats.current?.tendencies?.playAction, awayTendPrior?.playAction)}
+              </td>
+              <td className="py-2 text-center text-slate-400 font-sans">Play-Action Rate</td>
+              <td className="py-2 text-right">
+                {renderTendencyCell(homeStats.current?.tendencies?.playAction, homeTendPrior?.playAction)}
+              </td>
+            </tr>
+
+            {/* 6. Motion */}
+            <tr>
+              <td className="py-2">
+                {renderTendencyCell(awayStats.current?.tendencies?.motion, awayTendPrior?.motion)}
+              </td>
+              <td className="py-2 text-center text-slate-400 font-sans">Pre-Snap Motion Rate</td>
+              <td className="py-2 text-right">
+                {renderTendencyCell(homeStats.current?.tendencies?.motion, homeTendPrior?.motion)}
+              </td>
+            </tr>
+
+            {/* 7. Blitz */}
+            <tr>
+              <td className="py-2">
+                {renderTendencyCell(awayStats.current?.tendencies?.blitz, awayTendPrior?.blitz)}
+              </td>
+              <td className="py-2 text-center text-slate-400 font-sans">Defensive Blitz Rate</td>
+              <td className="py-2 text-right">
+                {renderTendencyCell(homeStats.current?.tendencies?.blitz, homeTendPrior?.blitz)}
+              </td>
+            </tr>
+
+            {/* 8. 8+ Box */}
+            <tr>
+              <td className="py-2">
+                {renderTendencyCell(awayStats.current?.tendencies?.box8Plus, awayTendPrior?.box8Plus)}
+              </td>
+              <td className="py-2 text-center text-slate-400 font-sans">8+ In Box Rate</td>
+              <td className="py-2 text-right">
+                {renderTendencyCell(homeStats.current?.tendencies?.box8Plus, homeTendPrior?.box8Plus)}
+              </td>
             </tr>
           </tbody>
         </table>
