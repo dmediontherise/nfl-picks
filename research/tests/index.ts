@@ -5,3 +5,6 @@ import './determinism.test';
 import './matchup-leakage.test';
 import './matchup-model-values.test';
 import './prereg-hash.test';
+import './carryover-prereg-hash.test';
+import './carryover-leakage.test';
+import './carryover-results-pin.test';

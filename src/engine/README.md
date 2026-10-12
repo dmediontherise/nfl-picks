@@ -7,6 +7,7 @@ The `src/engine` module implements a pure, deterministic, unit-tested NFL predic
 ## Specification
 
 - **Algorithm**: Massey Least-Squares system $(M + \lambda I) \cdot r = p$ with Ridge penalty $\lambda = 2.0$.
+- **Game Weighting**: `HistoricalGame` supports an optional `weight` property (defaulting to 1.0). Each game contributes its weight to the diagonal and off-diagonal cells of matrix $M$ and $\text{weight} \cdot \text{diff}$ to target vector $p$. Games with weight $\le 0$ contribute nothing.
 - **Home Field Advantage (HFA)**: $+2.0$ points for non-neutral venue games; $0.0$ points for neutral sites / Super Bowl.
 - **Logistic Win Probability**: $P(\text{Home Win}) = \frac{1}{1 + e^{-\text{Margin}/7.0}}$.
 - **Confidence Calibration**: Monotonic piecewise calibration mapping $|P(\text{Home Win}) - 0.5|$ to $[50.0, 98.0]$, capped at $\le 60.0$ for probabilities within $[0.42, 0.58]$.

@@ -43,6 +43,7 @@ export interface HistoricalGame {
   date?: string;
   seasonType?: number;
   week?: number;
+  weight?: number;
 }
 
 export interface PlayerInjury {

@@ -1,0 +1,319 @@
+{
+  "generatedAt": "2026-10-11T21:10:00Z",
+  "preRegistrationSha256": "feebf6b9f50d3fd6b25384db7fdfa3a77bfa035a4b3099f91ecf7c110ce4bb5a",
+  "dataset": {
+    "yearPrior": 2024,
+    "yearTarget": 2025,
+    "priorGamesCount": 285,
+    "targetRegularGamesCount": 272
+  },
+  "decisionRule": "Lowest primary log loss on 2025 regular season; prefer simpler schedule if margin < 0.002",
+  "decision": {
+    "winnerId": "decay_4",
+    "winnerSchedule": "max(0, 1 - (k - 1) / 4)",
+    "marginOverRunnerUp": 0.0139,
+    "runnerUpId": "fixed_0.1"
+  },
+  "candidates": [
+    {
+      "id": "fixed_0",
+      "name": "w = 0",
+      "type": "fixed",
+      "param": 0,
+      "primary": {
+        "games": 272,
+        "logLoss": 0.6511,
+        "brier": 0.2297,
+        "suAccuracy": 0.5993
+      },
+      "weeks_1_4": {
+        "games": 64,
+        "logLoss": 0.6798,
+        "brier": 0.2415,
+        "suAccuracy": 0.5313
+      },
+      "weeks_5_9": {
+        "games": 71,
+        "logLoss": 0.6589,
+        "brier": 0.2323,
+        "suAccuracy": 0.6197
+      },
+      "weeks_10_18": {
+        "games": 137,
+        "logLoss": 0.6336,
+        "brier": 0.2227,
+        "suAccuracy": 0.6204
+      }
+    },
+    {
+      "id": "fixed_0.1",
+      "name": "w = 0.1",
+      "type": "fixed",
+      "param": 0.1,
+      "primary": {
+        "games": 272,
+        "logLoss": 0.6394,
+        "brier": 0.2237,
+        "suAccuracy": 0.636
+      },
+      "weeks_1_4": {
+        "games": 64,
+        "logLoss": 0.6033,
+        "brier": 0.2048,
+        "suAccuracy": 0.7031
+      },
+      "weeks_5_9": {
+        "games": 71,
+        "logLoss": 0.6691,
+        "brier": 0.2368,
+        "suAccuracy": 0.6338
+      },
+      "weeks_10_18": {
+        "games": 137,
+        "logLoss": 0.6408,
+        "brier": 0.2257,
+        "suAccuracy": 0.6058
+      }
+    },
+    {
+      "id": "fixed_0.25",
+      "name": "w = 0.25",
+      "type": "fixed",
+      "param": 0.25,
+      "primary": {
+        "games": 272,
+        "logLoss": 0.6448,
+        "brier": 0.2257,
+        "suAccuracy": 0.636
+      },
+      "weeks_1_4": {
+        "games": 64,
+        "logLoss": 0.5814,
+        "brier": 0.1951,
+        "suAccuracy": 0.7344
+      },
+      "weeks_5_9": {
+        "games": 71,
+        "logLoss": 0.686,
+        "brier": 0.2431,
+        "suAccuracy": 0.6056
+      },
+      "weeks_10_18": {
+        "games": 137,
+        "logLoss": 0.6531,
+        "brier": 0.2311,
+        "suAccuracy": 0.6058
+      }
+    },
+    {
+      "id": "fixed_0.5",
+      "name": "w = 0.5",
+      "type": "fixed",
+      "param": 0.5,
+      "primary": {
+        "games": 272,
+        "logLoss": 0.6582,
+        "brier": 0.2312,
+        "suAccuracy": 0.636
+      },
+      "weeks_1_4": {
+        "games": 64,
+        "logLoss": 0.574,
+        "brier": 0.1922,
+        "suAccuracy": 0.7344
+      },
+      "weeks_5_9": {
+        "games": 71,
+        "logLoss": 0.7071,
+        "brier": 0.2506,
+        "suAccuracy": 0.5775
+      },
+      "weeks_10_18": {
+        "games": 137,
+        "logLoss": 0.6721,
+        "brier": 0.2393,
+        "suAccuracy": 0.6204
+      }
+    },
+    {
+      "id": "fixed_0.75",
+      "name": "w = 0.75",
+      "type": "fixed",
+      "param": 0.75,
+      "primary": {
+        "games": 272,
+        "logLoss": 0.6694,
+        "brier": 0.2358,
+        "suAccuracy": 0.625
+      },
+      "weeks_1_4": {
+        "games": 64,
+        "logLoss": 0.5724,
+        "brier": 0.1917,
+        "suAccuracy": 0.7188
+      },
+      "weeks_5_9": {
+        "games": 71,
+        "logLoss": 0.7214,
+        "brier": 0.2556,
+        "suAccuracy": 0.5775
+      },
+      "weeks_10_18": {
+        "games": 137,
+        "logLoss": 0.6877,
+        "brier": 0.2461,
+        "suAccuracy": 0.6058
+      }
+    },
+    {
+      "id": "fixed_1.0",
+      "name": "w = 1.0",
+      "type": "fixed",
+      "param": 1,
+      "primary": {
+        "games": 272,
+        "logLoss": 0.6784,
+        "brier": 0.2394,
+        "suAccuracy": 0.6213
+      },
+      "weeks_1_4": {
+        "games": 64,
+        "logLoss": 0.5721,
+        "brier": 0.1917,
+        "suAccuracy": 0.7188
+      },
+      "weeks_5_9": {
+        "games": 71,
+        "logLoss": 0.7317,
+        "brier": 0.2592,
+        "suAccuracy": 0.5775
+      },
+      "weeks_10_18": {
+        "games": 137,
+        "logLoss": 0.7005,
+        "brier": 0.2514,
+        "suAccuracy": 0.5985
+      }
+    },
+    {
+      "id": "decay_4",
+      "name": "decay N=4",
+      "type": "decay",
+      "param": 4,
+      "primary": {
+        "games": 272,
+        "logLoss": 0.6255,
+        "brier": 0.2179,
+        "suAccuracy": 0.6507
+      },
+      "weeks_1_4": {
+        "games": 64,
+        "logLoss": 0.571,
+        "brier": 0.1914,
+        "suAccuracy": 0.75
+      },
+      "weeks_5_9": {
+        "games": 71,
+        "logLoss": 0.6589,
+        "brier": 0.2323,
+        "suAccuracy": 0.6197
+      },
+      "weeks_10_18": {
+        "games": 137,
+        "logLoss": 0.6336,
+        "brier": 0.2227,
+        "suAccuracy": 0.6204
+      }
+    },
+    {
+      "id": "decay_8",
+      "name": "decay N=8",
+      "type": "decay",
+      "param": 8,
+      "primary": {
+        "games": 272,
+        "logLoss": 0.6394,
+        "brier": 0.2237,
+        "suAccuracy": 0.6287
+      },
+      "weeks_1_4": {
+        "games": 64,
+        "logLoss": 0.5712,
+        "brier": 0.1913,
+        "suAccuracy": 0.7188
+      },
+      "weeks_5_9": {
+        "games": 71,
+        "logLoss": 0.712,
+        "brier": 0.2548,
+        "suAccuracy": 0.5634
+      },
+      "weeks_10_18": {
+        "games": 137,
+        "logLoss": 0.6336,
+        "brier": 0.2227,
+        "suAccuracy": 0.6204
+      }
+    },
+    {
+      "id": "decay_12",
+      "name": "decay N=12",
+      "type": "decay",
+      "param": 12,
+      "primary": {
+        "games": 272,
+        "logLoss": 0.6431,
+        "brier": 0.2247,
+        "suAccuracy": 0.6287
+      },
+      "weeks_1_4": {
+        "games": 64,
+        "logLoss": 0.5715,
+        "brier": 0.1914,
+        "suAccuracy": 0.7188
+      },
+      "weeks_5_9": {
+        "games": 71,
+        "logLoss": 0.7144,
+        "brier": 0.2536,
+        "suAccuracy": 0.5915
+      },
+      "weeks_10_18": {
+        "games": 137,
+        "logLoss": 0.6396,
+        "brier": 0.2252,
+        "suAccuracy": 0.6058
+      }
+    },
+    {
+      "id": "decay_17",
+      "name": "decay N=17",
+      "type": "decay",
+      "param": 17,
+      "primary": {
+        "games": 272,
+        "logLoss": 0.6519,
+        "brier": 0.2282,
+        "suAccuracy": 0.6287
+      },
+      "weeks_1_4": {
+        "games": 64,
+        "logLoss": 0.5717,
+        "brier": 0.1915,
+        "suAccuracy": 0.7188
+      },
+      "weeks_5_9": {
+        "games": 71,
+        "logLoss": 0.7198,
+        "brier": 0.2552,
+        "suAccuracy": 0.5775
+      },
+      "weeks_10_18": {
+        "games": 137,
+        "logLoss": 0.6542,
+        "brier": 0.2314,
+        "suAccuracy": 0.6131
+      }
+    }
+  ]
+}
