@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "season": 2026,
-  "fetchedAt": "2026-10-12T01:42:45.008Z",
+  "fetchedAt": "2026-10-12T18:32:24.364Z",
   "games": [
     {
       "id": "401872656",
@@ -1228,6 +1228,22 @@
       "awayAbbr": "SF",
       "homeScore": 29,
       "awayScore": 32,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401872993",
+      "week": 5,
+      "seasonType": 2,
+      "date": "2026-10-12T00:20Z",
+      "homeAbbr": "ATL",
+      "awayAbbr": "BAL",
+      "homeScore": 23,
+      "awayScore": 30,
       "neutralSite": false,
       "market": {
         "spread": null,
