@@ -14,9 +14,11 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "test:research": "npx tsx research/tests/index.ts",
-    "test:scripts": "npx tsx scripts/__tests__/nflverse.test.ts && npx tsx scripts/__tests__/ftnJoinCoverage.test.ts",
+    "test:scripts": "npx tsx scripts/__tests__/nflverse.test.ts && npx tsx scripts/__tests__/ftnJoinCoverage.test.ts && npx tsx scripts/__tests__/teamStatsTendencies.test.ts && npx tsx scripts/__tests__/seasonResultsParser.test.ts && npx tsx scripts/__tests__/dataFreshness.test.ts && bash scripts/__tests__/publish-docs.test.sh",
     "snapshot:roster": "tsx scripts/fetch-roster-snapshot.ts",
     "snapshot:teamstats": "tsx scripts/fetch-team-stats.ts",
+    "snapshot:results": "tsx scripts/fetch-season-results.ts",
+    "check:freshness": "tsx scripts/check-data-freshness.ts",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build -b main --dest docs"

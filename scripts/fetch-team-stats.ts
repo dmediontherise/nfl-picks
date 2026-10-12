@@ -7,6 +7,7 @@ import {
   NFLTeamAbbreviation,
   OffensiveFormationGroup,
   PersonnelGroup,
+  TeamCurrentTendencies,
   TeamPriorSeasonStats,
   TeamStatsSnapshot,
   TeamUnitSnapshot,
@@ -48,6 +49,23 @@ const PBP_2025_URL =
   'https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_2025.csv.gz';
 const PARTICIPATION_2025_URL =
   'https://github.com/nflverse/nflverse-data/releases/download/pbp_participation/pbp_participation_2025.csv';
+const FTN_2025_URL =
+  'https://github.com/nflverse/nflverse-data/releases/download/ftn_charting/ftn_charting_2025.csv';
+
+/**
+ * Shared scrimmage-play filter for tendency accumulation. Mirrors the PBP loop
+ * rules in compute2026CurrentStats so 2025 and 2026 tendency bases match:
+ * regular season only, pass/run only, no kneels/spikes/2-pt tries, valid teams.
+ */
+function isChartableScrimmagePlay(row: RawPbpRow): boolean {
+  if (row.season_type !== 'REG') return false;
+  if (row.play_type !== 'pass' && row.play_type !== 'run') return false;
+  if (row.qb_kneel === '1' || row.play_type === 'qb_kneel') return false;
+  if (row.qb_spike === '1' || row.play_type === 'qb_spike') return false;
+  if (row.two_point_attempt === '1') return false;
+  if (!row.posteam || !row.defteam) return false;
+  return true;
+}
 
 function round(n: number, d = 4): number {
   if (!Number.isFinite(n)) return 0;
@@ -57,10 +75,15 @@ function round(n: number, d = 4): number {
 export interface RawFtnRow {
   nflverse_game_id?: string;
   nflverse_play_id?: string;
+  qb_location?: string;
   n_blitzers?: string;
   n_defense_box?: string;
+  n_pass_rushers?: string;
   is_play_action?: string;
   is_motion?: string;
+  is_no_huddle?: string;
+  is_screen_pass?: string;
+  is_rpo?: string;
 }
 
 export interface RawPbpRow {
@@ -92,6 +115,8 @@ export interface RawPbpRow {
   goal_to_go: string;
   epa: string;
   success: string;
+  shotgun?: string;
+  no_huddle?: string;
 }
 
 interface RawParticipationRow {
@@ -314,8 +339,96 @@ export class UnitStatsAccumulator {
   }
 }
 
+class TendenciesAccumulator {
+  offenseMatchedPlays = 0;
+  shotgunPlays = 0;
+  underCenterPlays = 0;
+  pistolPlays = 0;
+  playActionPlays = 0;
+  motionPlays = 0;
+  noHuddlePlays = 0;
+  screenPlays = 0;
+  rpoPlays = 0;
+
+  defenseMatchedPlays = 0;
+  box8PlusPlays = 0;
+  defenseDropbackPlays = 0;
+  blitzPlays = 0;
+  passRushersSum = 0;
+
+  addOffensePlay(row: RawPbpRow, ftn?: RawFtnRow) {
+    // Formation: FTN qb_location (S/U/P) if present and non-zero; fallback to PBP shotgun
+    let form: 'shotgun' | 'underCenter' | 'pistol' | null = null;
+    if (ftn?.qb_location && ftn.qb_location !== '0') {
+      if (ftn.qb_location === 'S') form = 'shotgun';
+      else if (ftn.qb_location === 'U') form = 'underCenter';
+      else if (ftn.qb_location === 'P') form = 'pistol';
+    }
+    if (!form) {
+      form = row.shotgun === '1' ? 'shotgun' : 'underCenter';
+    }
+    if (form === 'shotgun') this.shotgunPlays++;
+    else if (form === 'underCenter') this.underCenterPlays++;
+    else if (form === 'pistol') this.pistolPlays++;
+
+    if (ftn) {
+      this.offenseMatchedPlays++;
+      if (ftn.is_play_action === 'TRUE') this.playActionPlays++;
+      if (ftn.is_motion === 'TRUE') this.motionPlays++;
+      if (ftn.is_no_huddle === 'TRUE' || row.no_huddle === '1') this.noHuddlePlays++;
+      if (ftn.is_screen_pass === 'TRUE') this.screenPlays++;
+      if (ftn.is_rpo === 'TRUE') this.rpoPlays++;
+    }
+  }
+
+  addDefensePlay(row: RawPbpRow, ftn?: RawFtnRow) {
+    if (ftn) {
+      this.defenseMatchedPlays++;
+      const box = parseInt(ftn.n_defense_box || '0', 10);
+      if (box >= 8) this.box8PlusPlays++;
+
+      const isPass = row.play_type === 'pass';
+      const isSack = row.sack === '1';
+      const isDrop = row.qb_dropback === '1' || isPass || isSack;
+      if (isDrop) {
+        this.defenseDropbackPlays++;
+        const blitz = parseInt(ftn.n_blitzers || '0', 10);
+        if (blitz > 0) this.blitzPlays++;
+        const rush = parseInt(ftn.n_pass_rushers || '0', 10);
+        this.passRushersSum += rush;
+      }
+    }
+  }
+
+  finalize(): TeamCurrentTendencies {
+    const totalForm = this.shotgunPlays + this.underCenterPlays + this.pistolPlays || 1;
+    const offMatched = this.offenseMatchedPlays || 1;
+    const defMatched = this.defenseMatchedPlays || 1;
+    const dropbacks = this.defenseDropbackPlays || 1;
+
+    return {
+      formation: {
+        shotgun: { share: round(this.shotgunPlays / totalForm), plays: this.shotgunPlays },
+        underCenter: { share: round(this.underCenterPlays / totalForm), plays: this.underCenterPlays },
+        pistol: { share: round(this.pistolPlays / totalForm), plays: this.pistolPlays },
+      },
+      playAction: { share: round(this.playActionPlays / offMatched), plays: this.playActionPlays },
+      motion: { share: round(this.motionPlays / offMatched), plays: this.motionPlays },
+      noHuddle: { share: round(this.noHuddlePlays / offMatched), plays: this.noHuddlePlays },
+      screen: { share: round(this.screenPlays / offMatched), plays: this.screenPlays },
+      rpo: { share: round(this.rpoPlays / offMatched), plays: this.rpoPlays },
+      box8Plus: { share: round(this.box8PlusPlays / defMatched), plays: this.box8PlusPlays },
+      blitz: { share: round(this.blitzPlays / dropbacks), plays: this.blitzPlays },
+      passRushersMean: {
+        mean: this.defenseDropbackPlays > 0 ? round(this.passRushersSum / this.defenseDropbackPlays, 2) : 0,
+        plays: this.defenseDropbackPlays,
+      },
+    };
+  }
+}
+
 async function compute2026CurrentStats(): Promise<{
-  teamsCurrent: Record<NFLTeamAbbreviation, { gamesPlayed: number; offense: UnitEfficiencyStats; defense: UnitEfficiencyStats }>;
+  teamsCurrent: CurrentUnitByTeam;
   leagueAverage: { offense: UnitEfficiencyStats; defense: UnitEfficiencyStats };
   ftnJoinCoveragePct: number;
   ftnGamesCovered: number;
@@ -348,26 +461,20 @@ async function compute2026CurrentStats(): Promise<{
   const leagueDefAcc = new UnitStatsAccumulator();
   const leagueRzDrives = new Map<string, RedZoneDriveTracker>();
 
+  const tendenciesAcc = new Map<NFLTeamAbbreviation, TendenciesAccumulator>();
+
   for (const abbr of NFL_TEAM_ABBREVIATIONS) {
     teamGames.set(abbr, new Set());
     offAcc.set(abbr, new UnitStatsAccumulator());
     defAcc.set(abbr, new UnitStatsAccumulator());
+    tendenciesAcc.set(abbr, new TendenciesAccumulator());
   }
 
   const gameScrimmagePlays = new Map<string, number>();
   const gameMatchedPlays = new Map<string, number>();
 
   for await (const row of parseCsvObjects<RawPbpRow>(pbpStream)) {
-    if (row.season_type !== 'REG') continue;
-
-    // Filter valid scrimmage plays:
-    // Exclude kneels, spikes, penalties-only (no_play), 2-pt tries, special teams
-    if (row.play_type !== 'pass' && row.play_type !== 'run') continue;
-    if (row.qb_kneel === '1' || row.play_type === 'qb_kneel') continue;
-    if (row.qb_spike === '1' || row.play_type === 'qb_spike') continue;
-    if (row.two_point_attempt === '1') continue;
-
-    if (!row.posteam || !row.defteam) continue;
+    if (!isChartableScrimmagePlay(row)) continue;
 
     let offTeam: NFLTeamAbbreviation;
     let defTeam: NFLTeamAbbreviation;
@@ -392,6 +499,9 @@ async function compute2026CurrentStats(): Promise<{
     defAcc.get(defTeam)!.addPlay(row, ftnRow, false);
     leagueOffAcc.addPlay(row, ftnRow, true);
     leagueDefAcc.addPlay(row, ftnRow, false);
+
+    tendenciesAcc.get(offTeam)!.addOffensePlay(row, ftnRow);
+    tendenciesAcc.get(defTeam)!.addDefensePlay(row, ftnRow);
 
     // Red zone tracking: yardline_100 <= 20
     const y100 = parseFloat(row.yardline_100);
@@ -436,7 +546,7 @@ async function compute2026CurrentStats(): Promise<{
 
   const teamsCurrent: Record<
     NFLTeamAbbreviation,
-    { gamesPlayed: number; offense: UnitEfficiencyStats; defense: UnitEfficiencyStats }
+    { gamesPlayed: number; offense: UnitEfficiencyStats; defense: UnitEfficiencyStats; tendencies: TeamCurrentTendencies }
   > = {} as any;
 
   for (const abbr of NFL_TEAM_ABBREVIATIONS) {
@@ -444,12 +554,14 @@ async function compute2026CurrentStats(): Promise<{
     const defRz = summarizeRedZoneDrives(defRzDrives, `${abbr}_`);
     const offense = offAcc.get(abbr)!.finalize(offRz);
     const defense = defAcc.get(abbr)!.finalize(defRz);
+    const tendencies = tendenciesAcc.get(abbr)!.finalize();
     const gamesPlayed = teamGames.get(abbr)!.size;
 
     teamsCurrent[abbr] = {
       gamesPlayed,
       offense,
       defense,
+      tendencies,
     };
   }
 
@@ -470,9 +582,11 @@ async function compute2026CurrentStats(): Promise<{
   };
 }
 
-async function compute2025PriorScheme(): Promise<Record<NFLTeamAbbreviation, TeamPriorSeasonStats>> {
-  console.log('Downloading 2025 participation data...');
-  const partStream = await downloadNflverseFile(PARTICIPATION_2025_URL);
+export async function computeSchemeFromStreams(
+  partStream: NodeJS.ReadableStream,
+  pbpStream: NodeJS.ReadableStream,
+  season: number
+): Promise<Record<NFLTeamAbbreviation, TeamPriorSeasonStats>> {
   const partMap = new Map<string, RawParticipationRow>();
 
   for await (const row of parseCsvObjects<RawParticipationRow>(partStream)) {
@@ -480,10 +594,6 @@ async function compute2025PriorScheme(): Promise<Record<NFLTeamAbbreviation, Tea
       partMap.set(`${row.nflverse_game_id}_${row.play_id}`, row);
     }
   }
-  console.log(`Loaded ${partMap.size} 2025 participation records.`);
-
-  console.log('Downloading 2025 play-by-play data...');
-  const pbpStream = await downloadNflverseFile(PBP_2025_URL);
 
   const teamGames = new Map<NFLTeamAbbreviation, Set<string>>();
   const teamPlays = new Map<NFLTeamAbbreviation, number>();
@@ -647,7 +757,7 @@ async function compute2025PriorScheme(): Promise<Record<NFLTeamAbbreviation, Tea
     const ovc = offVsCoverage.get(abbr)!;
 
     result[abbr] = {
-      season: 2025,
+      season,
       gamesPlayed: teamGames.get(abbr)!.size,
       totalPlays: totalOffPlays,
       offensivePersonnel: {
@@ -702,13 +812,125 @@ async function compute2025PriorScheme(): Promise<Record<NFLTeamAbbreviation, Tea
   return result;
 }
 
-async function check2026Participation(): Promise<boolean> {
+export async function computeScheme(
+  partUrl: string,
+  pbpUrl: string,
+  season: number
+): Promise<Record<NFLTeamAbbreviation, TeamPriorSeasonStats>> {
+  console.log(`Downloading ${season} participation data...`);
+  const partStream = await downloadNflverseFile(partUrl);
+  console.log(`Downloading ${season} play-by-play data...`);
+  const pbpStream = await downloadNflverseFile(pbpUrl);
+  return computeSchemeFromStreams(partStream, pbpStream, season);
+}
+
+export async function compute2025PriorScheme(): Promise<Record<NFLTeamAbbreviation, TeamPriorSeasonStats>> {
+  return computeScheme(PARTICIPATION_2025_URL, PBP_2025_URL, 2025);
+}
+
+export async function compute2026CurrentScheme(): Promise<Record<NFLTeamAbbreviation, TeamPriorSeasonStats>> {
+  return computeScheme(PARTICIPATION_2026_URL, PBP_2026_URL, 2026);
+}
+
+/**
+ * Computes 2025 FTN+PBP scheme tendencies to serve as the visible "2025
+ * baseline" in the tendencies table. Participation-only priorSeason blocks
+ * carry no play-action/motion/blitz/box8+ figures, so the 2025 baseline for
+ * the FTN-derived rows comes from joining ftn_charting_2025 with PBP 2025 the
+ * same way the 2026 current tendencies are computed.
+ */
+export async function computeTendenciesFromStreams(
+  ftnStream: NodeJS.ReadableStream,
+  pbpStream: NodeJS.ReadableStream
+): Promise<Record<NFLTeamAbbreviation, TeamCurrentTendencies>> {
+  const ftnMap = new Map<string, RawFtnRow>();
+  for await (const row of parseCsvObjects<RawFtnRow>(ftnStream)) {
+    if (row.nflverse_game_id && row.nflverse_play_id) {
+      ftnMap.set(`${row.nflverse_game_id}_${row.nflverse_play_id}`, row);
+    }
+  }
+
+  const tendenciesAcc = new Map<NFLTeamAbbreviation, TendenciesAccumulator>();
+  for (const abbr of NFL_TEAM_ABBREVIATIONS) {
+    tendenciesAcc.set(abbr, new TendenciesAccumulator());
+  }
+
+  for await (const row of parseCsvObjects<RawPbpRow>(pbpStream)) {
+    if (!isChartableScrimmagePlay(row)) continue;
+    let offTeam: NFLTeamAbbreviation;
+    let defTeam: NFLTeamAbbreviation;
+    try {
+      offTeam = mapNflverseTeam(row.posteam);
+      defTeam = mapNflverseTeam(row.defteam);
+    } catch {
+      continue;
+    }
+    const ftn = ftnMap.get(`${row.game_id}_${row.play_id}`);
+    tendenciesAcc.get(offTeam)!.addOffensePlay(row, ftn);
+    tendenciesAcc.get(defTeam)!.addDefensePlay(row, ftn);
+  }
+
+  const result = {} as Record<NFLTeamAbbreviation, TeamCurrentTendencies>;
+  for (const abbr of NFL_TEAM_ABBREVIATIONS) {
+    result[abbr] = tendenciesAcc.get(abbr)!.finalize();
+  }
+  return result;
+}
+
+export async function check2026Participation(): Promise<boolean> {
   try {
     const res = await fetch(PARTICIPATION_2026_URL, { method: 'HEAD' });
     return res.status === 200;
   } catch {
     return false;
   }
+}
+
+export type CurrentUnitByTeam = Record<
+  NFLTeamAbbreviation,
+  {
+    gamesPlayed: number;
+    offense: UnitEfficiencyStats;
+    defense: UnitEfficiencyStats;
+    tendencies: TeamCurrentTendencies;
+  }
+>;
+
+/**
+ * Assembles per-team snapshot units. `currentSchemeByTeam` is present only when
+ * pbp_participation_2026 returned 200; when it is null the emitted units carry no
+ * `currentScheme` key. `priorSeasonTendenciesByTeam` carries the 2025 FTN+PBP
+ * tendencies used as the visible baseline for the FTN-derived tendency rows and
+ * is likewise omitted when null. Kept pure so Requirement 2's 200/404 paths are
+ * testable without network.
+ */
+export function assembleTeamUnits(
+  teamsCurrent: CurrentUnitByTeam,
+  priorSeasonByTeam: Record<NFLTeamAbbreviation, TeamPriorSeasonStats>,
+  currentSchemeByTeam: Record<NFLTeamAbbreviation, TeamPriorSeasonStats> | null,
+  priorSeasonTendenciesByTeam: Record<NFLTeamAbbreviation, TeamCurrentTendencies> | null = null
+): Record<NFLTeamAbbreviation, TeamUnitSnapshot> {
+  const teamsObj: Record<NFLTeamAbbreviation, TeamUnitSnapshot> = {} as any;
+  for (const abbr of NFL_TEAM_ABBREVIATIONS) {
+    const cur = teamsCurrent[abbr];
+    const prior = priorSeasonByTeam[abbr];
+    teamsObj[abbr] = {
+      team: abbr,
+      current: {
+        season: 2026,
+        gamesPlayed: cur.gamesPlayed,
+        offense: cur.offense,
+        defense: cur.defense,
+        tendencies: cur.tendencies,
+      },
+      priorSeason: prior,
+      ...(priorSeasonTendenciesByTeam
+        ? { priorSeasonTendencies: priorSeasonTendenciesByTeam[abbr] }
+        : {}),
+      ...(currentSchemeByTeam ? { currentScheme: currentSchemeByTeam[abbr] } : {}),
+    };
+  }
+  return teamsObj;
 }
 
 export async function run(): Promise<void> {
@@ -754,30 +976,54 @@ export async function run(): Promise<void> {
       priorSeasonByTeam = await compute2025PriorScheme();
     }
 
+    // 2b. 2025 FTN+PBP scheme tendencies (visible baseline for FTN-derived rows)
+    let priorSeasonTendenciesByTeam: Record<NFLTeamAbbreviation, TeamCurrentTendencies> | null = null;
+
+    if (!refreshPrior && fs.existsSync(SNAPSHOT_PATH)) {
+      try {
+        const existingData: TeamStatsSnapshot = JSON.parse(
+          fs.readFileSync(SNAPSHOT_PATH, 'utf-8')
+        );
+        const hasAllTendencies = NFL_TEAM_ABBREVIATIONS.every(
+          t => existingData.teams[t]?.priorSeasonTendencies
+        );
+        if (hasAllTendencies) {
+          console.log('Reusing cached 2025 FTN tendencies from existing snapshot.');
+          priorSeasonTendenciesByTeam = {} as Record<NFLTeamAbbreviation, TeamCurrentTendencies>;
+          for (const abbr of NFL_TEAM_ABBREVIATIONS) {
+            priorSeasonTendenciesByTeam[abbr] = existingData.teams[abbr].priorSeasonTendencies!;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to parse existing snapshot 2025 tendencies, will compute from scratch.');
+      }
+    }
+
+    if (!priorSeasonTendenciesByTeam) {
+      console.log('Downloading FTN 2025 charting data...');
+      const ftn2025Stream = await downloadNflverseFile(FTN_2025_URL);
+      console.log('Downloading PBP 2025 play-by-play data...');
+      const pbp2025Stream = await downloadNflverseFile(PBP_2025_URL);
+      priorSeasonTendenciesByTeam = await computeTendenciesFromStreams(ftn2025Stream, pbp2025Stream);
+    }
+
     // 3. Check for 2026 participation file
     const has2026Participation = await check2026Participation();
+    let currentSchemeByTeam: Record<NFLTeamAbbreviation, TeamPriorSeasonStats> | null = null;
     if (has2026Participation) {
       console.log('pbp_participation_2026 is available! (Emitting current-season scheme splits)');
+      currentSchemeByTeam = await compute2026CurrentScheme();
     } else {
       console.log('pbp_participation_2026 returned 404 (expected in-season). Scheme relies on 2025 prior.');
     }
 
     // 4. Assemble final snapshot
-    const teamsObj: Record<NFLTeamAbbreviation, TeamUnitSnapshot> = {} as any;
-    for (const abbr of NFL_TEAM_ABBREVIATIONS) {
-      const cur = teamsCurrent[abbr];
-      const prior = priorSeasonByTeam[abbr];
-      teamsObj[abbr] = {
-        team: abbr,
-        current: {
-          season: 2026,
-          gamesPlayed: cur.gamesPlayed,
-          offense: cur.offense,
-          defense: cur.defense,
-        },
-        priorSeason: prior,
-      };
-    }
+    const teamsObj = assembleTeamUnits(
+      teamsCurrent,
+      priorSeasonByTeam,
+      currentSchemeByTeam,
+      priorSeasonTendenciesByTeam
+    );
 
     const snapshot: TeamStatsSnapshot = {
       schemaVersion: 1,

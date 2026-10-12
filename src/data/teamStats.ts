@@ -213,11 +213,31 @@ export interface UnitEfficiencyStats {
   ftn: FtnUnitStats;
 }
 
+export interface TeamCurrentTendencies {
+  formation: {
+    shotgun: RateWithSample;
+    underCenter: RateWithSample;
+    pistol: RateWithSample;
+  };
+  playAction: RateWithSample;
+  motion: RateWithSample;
+  noHuddle: RateWithSample;
+  screen: RateWithSample;
+  rpo: RateWithSample;
+  box8Plus: RateWithSample;
+  blitz: RateWithSample;
+  passRushersMean: {
+    mean: number;
+    plays: number;
+  };
+}
+
 export interface TeamCurrentSeasonStats {
   season: number;
   gamesPlayed: number;
   offense: UnitEfficiencyStats;
   defense: UnitEfficiencyStats;
+  tendencies?: TeamCurrentTendencies;
 }
 
 export interface TopPersonnelGroupEpa {
@@ -271,6 +291,12 @@ export interface TeamUnitSnapshot {
   team: NFLTeamAbbreviation;
   current: TeamCurrentSeasonStats;
   priorSeason: TeamPriorSeasonStats;
+  /**
+   * 2025 FTN+PBP scheme tendencies used as the visible baseline for the
+   * FTN-derived tendency rows. Optional: snapshots predating this field still
+   * validate and render (the UI falls back to priorSeason where it can).
+   */
+  priorSeasonTendencies?: TeamCurrentTendencies;
   currentScheme?: TeamPriorSeasonStats;
 }
 
@@ -324,6 +350,45 @@ function findNonFiniteNumbers(obj: any, path = ''): string[] {
     }
   }
   return errors;
+}
+
+/**
+ * Validates a TeamCurrentTendencies block (current.tendencies or the optional
+ * priorSeasonTendencies 2025 baseline). Shared so both blocks are held to the
+ * same shape.
+ */
+function validateTendenciesShape(t: any, label: string, errors: string[]): void {
+  if (!t || typeof t !== 'object') {
+    errors.push(`Invalid tendencies object for ${label}`);
+    return;
+  }
+  if (!t.formation || typeof t.formation !== 'object') {
+    errors.push(`Invalid formation tendencies for ${label}`);
+  }
+  if (!t.playAction || typeof t.playAction !== 'object') {
+    errors.push(`Invalid playAction tendency for ${label}`);
+  }
+  if (!t.motion || typeof t.motion !== 'object') {
+    errors.push(`Invalid motion tendency for ${label}`);
+  }
+  if (!t.noHuddle || typeof t.noHuddle !== 'object') {
+    errors.push(`Invalid noHuddle tendency for ${label}`);
+  }
+  if (!t.screen || typeof t.screen !== 'object') {
+    errors.push(`Invalid screen tendency for ${label}`);
+  }
+  if (!t.rpo || typeof t.rpo !== 'object') {
+    errors.push(`Invalid rpo tendency for ${label}`);
+  }
+  if (!t.box8Plus || typeof t.box8Plus !== 'object') {
+    errors.push(`Invalid box8Plus tendency for ${label}`);
+  }
+  if (!t.blitz || typeof t.blitz !== 'object') {
+    errors.push(`Invalid blitz tendency for ${label}`);
+  }
+  if (!t.passRushersMean || typeof t.passRushersMean !== 'object') {
+    errors.push(`Invalid passRushersMean tendency for ${label}`);
+  }
 }
 
 /**
@@ -382,6 +447,23 @@ export function validateTeamStats(data: any): ValidationResult {
     } else if (teamData.priorSeason.season !== 2025) {
       errors.push(
         `Invalid priorSeason season for team ${teamAbbr} (expected 2025, got ${teamData.priorSeason.season})`
+      );
+    }
+
+    if (teamData.currentScheme !== undefined && typeof teamData.currentScheme !== 'object') {
+      errors.push(`Invalid currentScheme for team ${teamAbbr} (expected object)`);
+    }
+
+    if (teamData.current?.tendencies !== undefined) {
+      validateTendenciesShape(teamData.current.tendencies, `${teamAbbr} current.tendencies`, errors);
+    }
+
+    // Optional 2025 FTN+PBP baseline block. Older snapshots without it stay valid.
+    if (teamData.priorSeasonTendencies !== undefined) {
+      validateTendenciesShape(
+        teamData.priorSeasonTendencies,
+        `${teamAbbr} priorSeasonTendencies`,
+        errors
       );
     }
   }
