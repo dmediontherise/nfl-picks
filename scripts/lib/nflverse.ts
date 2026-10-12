@@ -381,6 +381,7 @@ export interface FtnCoverageEvaluation {
   joinIntegrityFailed: boolean;
   freshnessFailed: boolean;
   warnings: string[];
+  thresholds: { minJoinIntegrityPct: number; maxMissingGamePct: number };
 }
 
 export const FTN_MIN_JOIN_INTEGRITY_PCT = 90;
@@ -459,6 +460,7 @@ export function evaluateFtnCoverage(
     joinIntegrityFailed,
     freshnessFailed,
     warnings,
+    thresholds: { minJoinIntegrityPct, maxMissingGamePct },
   };
 }
 
@@ -473,7 +475,7 @@ export function assertFtnCoverage(coverage: FtnCoverageEvaluation): void {
   if (coverage.joinIntegrityFailed) {
     failures.push(
       `FTN join integrity regression: ${coverage.ftnJoinIntegrityPct.toFixed(2)}% is below ` +
-        `${FTN_MIN_JOIN_INTEGRITY_PCT}% threshold among FTN-covered games.`
+        `${coverage.thresholds.minJoinIntegrityPct}% threshold among FTN-covered games.`
     );
   }
 
@@ -481,7 +483,7 @@ export function assertFtnCoverage(coverage: FtnCoverageEvaluation): void {
     failures.push(
       `FTN freshness regression: ${coverage.missingGames.count}/${coverage.totalGames} regular-season ` +
         `games (${coverage.missingGamePct.toFixed(2)}%) have no FTN rows, above ` +
-        `${FTN_MAX_MISSING_GAME_PCT}% threshold. Missing: ${coverage.missingGames.gameIds.join(', ')}`
+        `${coverage.thresholds.maxMissingGamePct}% threshold. Missing: ${coverage.missingGames.gameIds.join(', ')}`
     );
   }
 

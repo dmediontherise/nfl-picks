@@ -275,3 +275,50 @@ test('R040-2: assertFtnCoverage does not throw when missing games are below the 
 
   assert.doesNotThrow(() => assertFtnCoverage(coverage));
 });
+
+test('R042-4a: default call sets thresholds to { minJoinIntegrityPct: 90, maxMissingGamePct: 25 }', () => {
+  const result = evaluateFtnCoverage([joinGame('g1', 100, 100, true)]);
+  assert.deepStrictEqual(result.thresholds, {
+    minJoinIntegrityPct: 90,
+    maxMissingGamePct: 25,
+  });
+});
+
+test('R042-4b: custom integrity threshold (95%) quotes 95% and does not quote 90%', () => {
+  // 92% integrity: passes default 90%, but fails custom 95%
+  const coverage = evaluateFtnCoverage([joinGame('g1', 100, 92, true)], {
+    minJoinIntegrityPct: 95,
+  });
+  assert.strictEqual(coverage.joinIntegrityFailed, true);
+
+  assert.throws(
+    () => assertFtnCoverage(coverage),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('95%'), 'message cites custom 95% threshold');
+      assert.ok(!err.message.includes('90%'), 'message does not cite default 90% threshold');
+      return true;
+    }
+  );
+});
+
+test('R042-4c: custom freshness threshold (10%) quotes 10% and does not quote 25%', () => {
+  // 2 of 10 missing (20% missing): passes default 25%, but fails custom 10%
+  const games: ScrimmageGameJoin[] = [];
+  for (let i = 0; i < 10; i++) {
+    const hasFtnRows = i < 8;
+    games.push(joinGame(`g${i}`, 100, hasFtnRows ? 100 : 0, hasFtnRows));
+  }
+  const coverage = evaluateFtnCoverage(games, { maxMissingGamePct: 10 });
+  assert.strictEqual(coverage.freshnessFailed, true);
+
+  assert.throws(
+    () => assertFtnCoverage(coverage),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('10%'), 'message cites custom 10% threshold');
+      assert.ok(!err.message.includes('25%'), 'message does not cite default 25% threshold');
+      return true;
+    }
+  );
+});
