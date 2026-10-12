@@ -191,9 +191,6 @@ const MediPicksApp: React.FC = () => {
             <div>
               <h1 className="text-2xl font-black tracking-tighter text-white flex items-center gap-2">
                 MEDI PICKS <span className="text-blue-500">{CURRENT_SEASON}</span>
-                <span className="text-[10px] bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded border border-blue-600/30 font-mono tracking-widest">
-                  PRESEASON
-                </span>
               </h1>
               <p className="text-xs text-slate-400 font-medium tracking-wide uppercase flex items-center gap-2 mt-1">
                 {currentStage.label} • Season {meta?.season || CURRENT_SEASON}
