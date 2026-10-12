@@ -72,6 +72,7 @@ function createValidTeamUnit(abbr: NFLTeamAbbreviation, gamesPlayed = 4): TeamUn
           motionPlays: 138,
           box8PlusRate: 0.16,
           box8PlusPlays: 40,
+          ftnPlays: 250,
         },
       },
       defense: {
@@ -119,6 +120,7 @@ function createValidTeamUnit(abbr: NFLTeamAbbreviation, gamesPlayed = 4): TeamUn
           motionPlays: 127,
           box8PlusRate: 0.18,
           box8PlusPlays: 44,
+          ftnPlays: 245,
         },
       },
     },
@@ -384,6 +386,66 @@ describe('Team Stats Snapshot Data Layer', () => {
       const res = validateTeamStats(snap);
       expect(res.valid).toBe(false);
       expect(res.errors.some(e => e.includes('expected 2025'))).toBe(true);
+    });
+  });
+
+  describe('Requirement 039-3: FTN coverage metadata validation', () => {
+    it('accepts a snapshot that carries the new FTN coverage metadata', () => {
+      const snap: any = createValidSnapshot();
+      snap.ftnGamesCovered = 8;
+      snap.ftnGamesMissing = { count: 1, gameIds: ['2026_05_KC_BAL'] };
+      snap.ftnJoinIntegrityPct = 100;
+
+      const res = validateTeamStats(snap);
+      expect(res.valid).toBe(true);
+      expect(res.errors).toHaveLength(0);
+    });
+
+    it('still accepts an older snapshot without the new FTN metadata', () => {
+      const snap: any = createValidSnapshot();
+      expect('ftnGamesCovered' in snap).toBe(false);
+      expect('ftnGamesMissing' in snap).toBe(false);
+      expect('ftnJoinIntegrityPct' in snap).toBe(false);
+
+      const res = validateTeamStats(snap);
+      expect(res.valid).toBe(true);
+      expect(res.errors).toHaveLength(0);
+    });
+
+    it('rejects malformed FTN coverage metadata when present', () => {
+      const badCovered: any = createValidSnapshot();
+      badCovered.ftnGamesCovered = 'eight';
+      expect(validateTeamStats(badCovered).valid).toBe(false);
+
+      const badMissing: any = createValidSnapshot();
+      badMissing.ftnGamesMissing = { count: 1 };
+      expect(validateTeamStats(badMissing).valid).toBe(false);
+
+      const badIntegrity: any = createValidSnapshot();
+      badIntegrity.ftnJoinIntegrityPct = NaN;
+      expect(validateTeamStats(badIntegrity).valid).toBe(false);
+    });
+
+    it('rejects a non-numeric integrity pct, a negative missing count, and non-string game ids', () => {
+      const badIntegrityType: any = createValidSnapshot();
+      badIntegrityType.ftnJoinIntegrityPct = 'high';
+      expect(validateTeamStats(badIntegrityType).valid).toBe(false);
+
+      const negativeCount: any = createValidSnapshot();
+      negativeCount.ftnGamesMissing = { count: -1, gameIds: [] };
+      expect(validateTeamStats(negativeCount).valid).toBe(false);
+
+      const nonStringIds: any = createValidSnapshot();
+      nonStringIds.ftnGamesMissing = { count: 1, gameIds: [5] };
+      expect(validateTeamStats(nonStringIds).valid).toBe(false);
+    });
+
+    it('rejects a negative ftnGamesCovered', () => {
+      const negativeCovered: any = createValidSnapshot();
+      negativeCovered.ftnGamesCovered = -5;
+      const res = validateTeamStats(negativeCovered);
+      expect(res.valid).toBe(false);
+      expect(res.errors.some(e => e.includes('ftnGamesCovered'))).toBe(true);
     });
   });
 

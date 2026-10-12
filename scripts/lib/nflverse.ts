@@ -357,3 +357,137 @@ export function computeCoverageShares(counts: CoverageCounts): CoverageSharesRes
     other: { share: roundHelper(counts.other / chartedPass), plays: counts.other },
   };
 }
+
+export interface ScrimmageGameJoin {
+  gameId: string;
+  scrimmagePlays: number;
+  matchedPlays: number;
+  /** FTN published at least one charting row for this game (regardless of whether it matched). */
+  hasFtnRows: boolean;
+}
+
+export interface FtnCoverageThresholds {
+  minJoinIntegrityPct?: number;
+  maxMissingGamePct?: number;
+}
+
+export interface FtnCoverageEvaluation {
+  totalGames: number;
+  coveredGames: number;
+  missingGames: { count: number; gameIds: string[] };
+  missingGamePct: number;
+  ftnJoinIntegrityPct: number;
+  ftnJoinCoveragePct: number;
+  joinIntegrityFailed: boolean;
+  freshnessFailed: boolean;
+  warnings: string[];
+  thresholds: { minJoinIntegrityPct: number; maxMissingGamePct: number };
+}
+
+export const FTN_MIN_JOIN_INTEGRITY_PCT = 90;
+export const FTN_MAX_MISSING_GAME_PCT = 25;
+
+/**
+ * Pure gate over FTN join coverage. Takes per-game scrimmage/matched play counts and
+ * separates the two things that used to be one gate:
+ *
+ * - Join integrity: among games that have at least one FTN charting row, the share of
+ *   scrimmage plays matched must be >= minJoinIntegrityPct (default 90). This catches a
+ *   real join break (changed id format, bad key): a game whose FTN rows exist but match
+ *   nothing still lands in the denominator with zero in the numerator.
+ * - FTN freshness: the share of regular-season games with no FTN rows at all must be
+ *   <= maxMissingGamePct (default 25). This catches FTN publishing lag without treating
+ *   it as a broken join. Missing game ids are always returned.
+ *
+ * When FTN has no covered games, integrity is treated as vacuously satisfied and freshness
+ * carries the failure. A game is "missing" when FTN has no rows for it.
+ */
+export function evaluateFtnCoverage(
+  games: ScrimmageGameJoin[],
+  thresholds?: FtnCoverageThresholds
+): FtnCoverageEvaluation {
+  const minJoinIntegrityPct = thresholds?.minJoinIntegrityPct ?? FTN_MIN_JOIN_INTEGRITY_PCT;
+  const maxMissingGamePct = thresholds?.maxMissingGamePct ?? FTN_MAX_MISSING_GAME_PCT;
+
+  let totalScrimmage = 0;
+  let totalMatched = 0;
+  let coveredScrimmage = 0;
+  let coveredMatched = 0;
+  const missingGameIds: string[] = [];
+
+  for (const game of games) {
+    const scrimmage = game.scrimmagePlays || 0;
+    const matched = game.matchedPlays || 0;
+    totalScrimmage += scrimmage;
+    totalMatched += matched;
+    if (game.hasFtnRows) {
+      coveredScrimmage += scrimmage;
+      coveredMatched += matched;
+    } else {
+      missingGameIds.push(game.gameId);
+    }
+  }
+
+  const totalGames = games.length;
+  const coveredGames = totalGames - missingGameIds.length;
+
+  const ftnJoinIntegrityPct =
+    coveredScrimmage > 0 ? (coveredMatched / coveredScrimmage) * 100 : 100;
+  const ftnJoinCoveragePct = totalScrimmage > 0 ? (totalMatched / totalScrimmage) * 100 : 100;
+  const missingGamePct = totalGames > 0 ? (missingGameIds.length / totalGames) * 100 : 0;
+
+  const joinIntegrityFailed = coveredScrimmage > 0 && ftnJoinIntegrityPct < minJoinIntegrityPct;
+  const freshnessFailed = missingGamePct > maxMissingGamePct;
+
+  const warnings: string[] = [];
+  if (missingGameIds.length > 0 && !freshnessFailed) {
+    warnings.push(
+      `FTN freshness warning: ${missingGameIds.length}/${totalGames} regular-season games (${missingGamePct.toFixed(
+        2
+      )}%) have no FTN rows (<= ${maxMissingGamePct}% allowed). Missing: ${missingGameIds.join(
+        ', '
+      )}`
+    );
+  }
+
+  return {
+    totalGames,
+    coveredGames,
+    missingGames: { count: missingGameIds.length, gameIds: missingGameIds },
+    missingGamePct,
+    ftnJoinIntegrityPct,
+    ftnJoinCoveragePct,
+    joinIntegrityFailed,
+    freshnessFailed,
+    warnings,
+    thresholds: { minJoinIntegrityPct, maxMissingGamePct },
+  };
+}
+
+/**
+ * Turns an `evaluateFtnCoverage` result into the gate decision: throws an Error naming
+ * every failed check with its numbers, or returns quietly when the run may proceed.
+ * Kept as its own exported function so the throw path is directly testable.
+ */
+export function assertFtnCoverage(coverage: FtnCoverageEvaluation): void {
+  const failures: string[] = [];
+
+  if (coverage.joinIntegrityFailed) {
+    failures.push(
+      `FTN join integrity regression: ${coverage.ftnJoinIntegrityPct.toFixed(2)}% is below ` +
+        `${coverage.thresholds.minJoinIntegrityPct}% threshold among FTN-covered games.`
+    );
+  }
+
+  if (coverage.freshnessFailed) {
+    failures.push(
+      `FTN freshness regression: ${coverage.missingGames.count}/${coverage.totalGames} regular-season ` +
+        `games (${coverage.missingGamePct.toFixed(2)}%) have no FTN rows, above ` +
+        `${coverage.thresholds.maxMissingGamePct}% threshold. Missing: ${coverage.missingGames.gameIds.join(', ')}`
+    );
+  }
+
+  if (failures.length > 0) {
+    throw new Error(failures.join(' '));
+  }
+}

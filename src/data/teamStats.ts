@@ -190,6 +190,8 @@ export interface FtnUnitStats {
   motionPlays: number;
   box8PlusRate: number;
   box8PlusPlays: number;
+  /** Number of plays in this unit's sample that matched an FTN charting row. */
+  ftnPlays: number;
 }
 
 export interface UnitEfficiencyStats {
@@ -272,12 +274,27 @@ export interface TeamUnitSnapshot {
   currentScheme?: TeamPriorSeasonStats;
 }
 
+export interface FtnGamesMissing {
+  count: number;
+  gameIds: string[];
+}
+
 export interface TeamStatsSnapshot {
   schemaVersion: number;
   fetchedAt: string;
   season: number;
   dataAttribution: string;
-  ftnJoinCoveragePct: number;
+  /**
+   * Share of scrimmage plays matched across all games. Retained for continuity; the
+   * integrity/freshness pair below is what the snapshot gate now keys on.
+   */
+  ftnJoinCoveragePct?: number;
+  /** Regular-season games that have at least one FTN charting row. */
+  ftnGamesCovered?: number;
+  /** Regular-season games with no FTN rows at all, plus their game ids. */
+  ftnGamesMissing?: FtnGamesMissing;
+  /** Share of scrimmage plays matched among FTN-covered games only. */
+  ftnJoinIntegrityPct?: number;
   leagueAverage: {
     offense: UnitEfficiencyStats;
     defense: UnitEfficiencyStats;
@@ -366,6 +383,39 @@ export function validateTeamStats(data: any): ValidationResult {
       errors.push(
         `Invalid priorSeason season for team ${teamAbbr} (expected 2025, got ${teamData.priorSeason.season})`
       );
+    }
+  }
+
+  // Optional FTN coverage metadata (added after the original schema). Older snapshots
+  // that predate these fields must keep validating; when present they are shape-checked.
+  if (data.ftnGamesCovered !== undefined) {
+    if (
+      typeof data.ftnGamesCovered !== 'number' ||
+      !Number.isFinite(data.ftnGamesCovered) ||
+      data.ftnGamesCovered < 0
+    ) {
+      errors.push('Invalid ftnGamesCovered (expected a non-negative number)');
+    }
+  }
+
+  if (data.ftnJoinIntegrityPct !== undefined) {
+    if (typeof data.ftnJoinIntegrityPct !== 'number' || !Number.isFinite(data.ftnJoinIntegrityPct)) {
+      errors.push('Invalid ftnJoinIntegrityPct (expected a finite number)');
+    }
+  }
+
+  if (data.ftnGamesMissing !== undefined) {
+    const missing = data.ftnGamesMissing;
+    if (
+      !missing ||
+      typeof missing !== 'object' ||
+      typeof missing.count !== 'number' ||
+      !Number.isFinite(missing.count) ||
+      missing.count < 0 ||
+      !Array.isArray(missing.gameIds) ||
+      missing.gameIds.some((id: unknown) => typeof id !== 'string')
+    ) {
+      errors.push('Invalid ftnGamesMissing (expected { count: number, gameIds: string[] })');
     }
   }
 
