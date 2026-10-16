@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "season": 2026,
-  "fetchedAt": "2026-10-13T16:42:29.115Z",
+  "fetchedAt": "2026-10-16T13:43:56.539Z",
   "games": [
     {
       "id": "401872656",
@@ -1260,6 +1260,22 @@
       "awayAbbr": "BUF",
       "homeScore": 34,
       "awayScore": 37,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401872995",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-16T00:15Z",
+      "homeAbbr": "DEN",
+      "awayAbbr": "SEA",
+      "homeScore": 17,
+      "awayScore": 14,
       "neutralSite": false,
       "market": {
         "spread": null,
