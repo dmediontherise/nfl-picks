@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "season": 2026,
-  "fetchedAt": "2026-10-16T13:43:56.539Z",
+  "fetchedAt": "2026-10-19T16:09:06.331Z",
   "games": [
     {
       "id": "401872656",
@@ -1276,6 +1276,198 @@
       "awayAbbr": "SEA",
       "homeScore": 17,
       "awayScore": 14,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401872996",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T13:30Z",
+      "homeAbbr": "JAX",
+      "awayAbbr": "HOU",
+      "homeScore": 31,
+      "awayScore": 34,
+      "neutralSite": true,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401872997",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T17:00Z",
+      "homeAbbr": "CLE",
+      "awayAbbr": "BAL",
+      "homeScore": 13,
+      "awayScore": 10,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401872998",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T17:00Z",
+      "homeAbbr": "PHI",
+      "awayAbbr": "CAR",
+      "homeScore": 14,
+      "awayScore": 25,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401872999",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T17:00Z",
+      "homeAbbr": "ATL",
+      "awayAbbr": "CHI",
+      "homeScore": 23,
+      "awayScore": 31,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873000",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T17:00Z",
+      "homeAbbr": "NYG",
+      "awayAbbr": "NO",
+      "homeScore": 27,
+      "awayScore": 34,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873001",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T17:00Z",
+      "homeAbbr": "NE",
+      "awayAbbr": "NYJ",
+      "homeScore": 26,
+      "awayScore": 19,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873002",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T17:00Z",
+      "homeAbbr": "TB",
+      "awayAbbr": "PIT",
+      "homeScore": 19,
+      "awayScore": 26,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873003",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T17:00Z",
+      "homeAbbr": "IND",
+      "awayAbbr": "TEN",
+      "homeScore": 20,
+      "awayScore": 26,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873004",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T20:05Z",
+      "homeAbbr": "LAR",
+      "awayAbbr": "ARI",
+      "homeScore": 16,
+      "awayScore": 18,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873005",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T20:25Z",
+      "homeAbbr": "LV",
+      "awayAbbr": "BUF",
+      "homeScore": 30,
+      "awayScore": 33,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873006",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-18T20:25Z",
+      "homeAbbr": "KC",
+      "awayAbbr": "LAC",
+      "homeScore": 22,
+      "awayScore": 6,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873007",
+      "week": 6,
+      "seasonType": 2,
+      "date": "2026-10-19T00:20Z",
+      "homeAbbr": "GB",
+      "awayAbbr": "DAL",
+      "homeScore": 23,
+      "awayScore": 13,
       "neutralSite": false,
       "market": {
         "spread": null,
