@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "season": 2026,
-  "fetchedAt": "2026-10-20T14:04:07.888Z",
+  "fetchedAt": "2026-10-23T14:02:32.414Z",
   "games": [
     {
       "id": "401872656",
@@ -1484,6 +1484,22 @@
       "awayAbbr": "WSH",
       "homeScore": 23,
       "awayScore": 17,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873010",
+      "week": 7,
+      "seasonType": 2,
+      "date": "2026-10-23T00:15Z",
+      "homeAbbr": "CHI",
+      "awayAbbr": "NE",
+      "homeScore": 30,
+      "awayScore": 24,
       "neutralSite": false,
       "market": {
         "spread": null,
