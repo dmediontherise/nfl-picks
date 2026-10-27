@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "season": 2026,
-  "fetchedAt": "2026-10-26T15:47:49.339Z",
+  "fetchedAt": "2026-10-27T15:05:51.063Z",
   "games": [
     {
       "id": "401872656",
@@ -1692,6 +1692,22 @@
       "awayAbbr": "KC",
       "homeScore": 20,
       "awayScore": 3,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873009",
+      "week": 7,
+      "seasonType": 2,
+      "date": "2026-10-27T00:15Z",
+      "homeAbbr": "PHI",
+      "awayAbbr": "DAL",
+      "homeScore": 21,
+      "awayScore": 38,
       "neutralSite": false,
       "market": {
         "spread": null,
