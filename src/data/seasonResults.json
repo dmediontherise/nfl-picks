@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "season": 2026,
-  "fetchedAt": "2026-10-27T15:05:51.063Z",
+  "fetchedAt": "2026-10-30T15:29:33.985Z",
   "games": [
     {
       "id": "401872656",
@@ -1708,6 +1708,22 @@
       "awayAbbr": "DAL",
       "homeScore": 21,
       "awayScore": 38,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873023",
+      "week": 8,
+      "seasonType": 2,
+      "date": "2026-10-30T00:15Z",
+      "homeAbbr": "GB",
+      "awayAbbr": "CAR",
+      "homeScore": 27,
+      "awayScore": 19,
       "neutralSite": false,
       "market": {
         "spread": null,
