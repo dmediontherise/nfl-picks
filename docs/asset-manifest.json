@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/nfl-picks/static/css/main.ea82adb8.css",
-    "main.js": "/nfl-picks/static/js/main.ef6c2706.js",
+    "main.js": "/nfl-picks/static/js/main.be4b87d9.js",
     "index.html": "/nfl-picks/index.html",
     "main.ea82adb8.css.map": "/nfl-picks/static/css/main.ea82adb8.css.map",
-    "main.ef6c2706.js.map": "/nfl-picks/static/js/main.ef6c2706.js.map"
+    "main.be4b87d9.js.map": "/nfl-picks/static/js/main.be4b87d9.js.map"
   },
   "entrypoints": [
     "static/css/main.ea82adb8.css",
-    "static/js/main.ef6c2706.js"
+    "static/js/main.be4b87d9.js"
   ]
 }
