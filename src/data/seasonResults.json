@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "season": 2026,
-  "fetchedAt": "2026-11-20T17:30:01.447Z",
+  "fetchedAt": "2026-11-23T20:49:57.929Z",
   "games": [
     {
       "id": "401872656",
@@ -2413,6 +2413,182 @@
       "homeScore": 26,
       "awayScore": 3,
       "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873067",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-22T18:00Z",
+      "homeAbbr": "KC",
+      "awayAbbr": "ARI",
+      "homeScore": 34,
+      "awayScore": 7,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873068",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-22T18:00Z",
+      "homeAbbr": "CAR",
+      "awayAbbr": "BAL",
+      "homeScore": 35,
+      "awayScore": 33,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873070",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-22T18:00Z",
+      "homeAbbr": "BUF",
+      "awayAbbr": "MIA",
+      "homeScore": 26,
+      "awayScore": 9,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873071",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-22T18:00Z",
+      "homeAbbr": "CHI",
+      "awayAbbr": "NO",
+      "homeScore": 21,
+      "awayScore": 13,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873072",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-22T18:00Z",
+      "homeAbbr": "DET",
+      "awayAbbr": "TB",
+      "homeScore": 31,
+      "awayScore": 21,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873073",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-22T18:00Z",
+      "homeAbbr": "DAL",
+      "awayAbbr": "TEN",
+      "homeScore": 51,
+      "awayScore": 30,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873076",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-22T18:00Z",
+      "homeAbbr": "PHI",
+      "awayAbbr": "PIT",
+      "homeScore": 19,
+      "awayScore": 16,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873074",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-22T21:05Z",
+      "homeAbbr": "LAC",
+      "awayAbbr": "NYJ",
+      "homeScore": 24,
+      "awayScore": 27,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873069",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-22T21:25Z",
+      "homeAbbr": "NYG",
+      "awayAbbr": "JAX",
+      "homeScore": 23,
+      "awayScore": 18,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873075",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-22T21:25Z",
+      "homeAbbr": "DEN",
+      "awayAbbr": "LV",
+      "homeScore": 38,
+      "awayScore": 24,
+      "neutralSite": false,
+      "market": {
+        "spread": null,
+        "total": null,
+        "moneylineHome": null
+      }
+    },
+    {
+      "id": "401873077",
+      "week": 11,
+      "seasonType": 2,
+      "date": "2026-11-23T01:20Z",
+      "homeAbbr": "SF",
+      "awayAbbr": "MIN",
+      "homeScore": 35,
+      "awayScore": 10,
+      "neutralSite": true,
       "market": {
         "spread": null,
         "total": null,
